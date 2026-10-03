@@ -59,13 +59,45 @@ function A.reset(name)
   A.trips[name] = nil
 end
 
+-- przelaczniki redstone polaczone z urzadzeniem (control.link) i "sterowane razem" (linkSync)
+function A.linkedControls(cfg, name)
+  local r = {}
+  for i, c in ipairs((cfg or A.cfg or {}).controls or {}) do
+    if c.link == name then r[#r + 1] = i end
+  end
+  return r
+end
+
+function A.syncLinked(name, on)
+  local cfg = A.cfg
+  if not cfg then return end
+  for _, i in ipairs(A.linkedControls(cfg, name)) do
+    local c = cfg.controls[i]
+    if c.linkSync ~= false then
+      if c.mode == "pulse" then
+        D.setRedstone(c.target, c.side, true)
+        sleep(0.3)
+        D.setRedstone(c.target, c.side, false)
+      elseif c.state ~= on then
+        c.state = on
+        D.setRedstone(c.target, c.side, on)
+      end
+    end
+  end
+  if A.onChange then A.onChange() end
+end
+
 -- reczny start reaktora (blokowany gdy zabezpieczenie zadzialalo)
 function A.start(dev)
   if A.trips[dev.name] then return false, "Zabezpieczenie aktywne - zrob RESET" end
-  if U.call(dev.p, "getStatus") then return true end
+  if U.call(dev.p, "getStatus") then
+    A.syncLinked(dev.name, true)
+    return true
+  end
   local ok, err = pcall(dev.p.activate)
   if not ok then return false, tostring(err) end
   logEvent("Start reaktora: " .. D.label(dev))
+  A.syncLinked(dev.name, true)
   return true
 end
 
@@ -74,6 +106,7 @@ function A.scram(dev, reason)
     pcall(dev.p.scram)
     logEvent("SCRAM " .. D.label(dev) .. (reason and (": " .. reason) or ""), reason and "crit" or "info")
   end
+  A.syncLinked(dev.name, false)
 end
 
 local function checkFission(cfg, cur)
@@ -118,7 +151,7 @@ local function autoPower(cfg)
       if not active and frac * 100 < ap.startBelow then
         if A.start(d) then logEvent("Auto: start (energia " .. U.pct(frac) .. ")") end
       elseif active and frac * 100 > ap.stopAbove then
-        pcall(d.p.scram)
+        A.scram(d)
         logEvent("Auto: stop (energia " .. U.pct(frac) .. ")")
       end
     end
@@ -218,6 +251,7 @@ local function sound(cfg, cur)
 end
 
 function A.tick(cfg)
+  A.cfg = cfg
   local cur = {}
   checkFission(cfg, cur)
   autoPower(cfg)

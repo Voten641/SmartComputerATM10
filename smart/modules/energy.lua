@@ -182,10 +182,7 @@ local function drawSources(ctx, m, c)
     y = y + b.h
   end
   if scroll then c:scrollButtons("slist", c.w - 3, 4, c.h - 3, m.accent) end
-  if m.flash and m.flash.untilT > os.clock() then
-    c:rect(1, c.h, c.w, 1, colors.red)
-    c:center(c.h, m.flash.text, colors.white, colors.red)
-  end
+  M.flash(c, m)
 end
 
 function mod.draw(ctx, m, c)
@@ -278,8 +275,8 @@ function mod.touch(ctx, m, btn)
   elseif btn.id == "slist_up" then st.sOffset = (st.sOffset or 0) - 1
   elseif btn.id == "slist_down" then st.sOffset = (st.sOffset or 0) + 1
   elseif btn.id == "src" then
-    local ok, err = S.action(ctx, btn.data[1], btn.data[2], btn.data[3])
-    if not ok then m.flash = { text = tostring(err), untilT = os.clock() + 3 } end
+    local ok, msg = S.action(ctx, btn.data[1], btn.data[2], btn.data[3])
+    m.flash = { text = tostring(msg or (ok and "OK" or "Blad")), untilT = os.clock() + 3, ok = ok }
   end
 end
 

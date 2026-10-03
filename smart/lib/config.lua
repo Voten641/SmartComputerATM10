@@ -7,7 +7,8 @@ C.path = "/smart/data/config.lua"
 C.defaults = {
   title = "Baza ATM10",
   refresh = 1,            -- co ile sekund odswiezac dane
-  itemsEvery = 5,         -- co ile odswiezen pobierac liste przedmiotow z ME/RS (ciezka operacja)
+  itemsEvery = 5,
+  clickSound = true,      -- dzwiek potwierdzenia klikniecia na monitorze (wymaga glosnika)         -- co ile odswiezen pobierac liste przedmiotow z ME/RS (ciezka operacja)
   monitors = {},          -- [nazwaMonitora] = { module, source, scale, accent, title, opts }
   aliases = {},           -- [nazwaPeryferium] = "przyjazna nazwa"
   hidden = {},            -- [nazwaPeryferium] = true

@@ -53,7 +53,7 @@ function mod.draw(ctx, m, c)
   local st, o = m.state, m.opts
   local title = M.title(m, "Reaktor fission")
   if not st.dev then
-    return M.message(c, m, title, { "Brak reaktora", "Podlacz Fission Reactor Logic Adapter", "lub Reactor Port przez modem" })
+    return M.message(c, m, title, M.portHint({ "Brak reaktora", "Podlacz modemem Fission Reactor", "Logic Adapter" }, "fissionport"))
   end
   title = M.title(m, D.label(st.dev))
   if not st.formed then
@@ -102,10 +102,7 @@ function mod.draw(ctx, m, c)
       c:button("burn", 5 + bw * 3, ry, w - 3 - bw * 3, 1, "+" .. step * 10, colors.white, colors.gray, step * 10)
     end
   end
-  if m.flash and m.flash.untilT > os.clock() then
-    c:rect(1, c.h, c.w, 1, colors.red)
-    c:center(c.h, m.flash.text, colors.white, colors.red)
-  end
+  M.flash(c, m)
 end
 
 function mod.touch(ctx, m, btn)
@@ -114,18 +111,20 @@ function mod.touch(ctx, m, btn)
   local id = btn.id
   if id == "start" then
     local ok, err = ctx.auto.start(d)
-    if not ok then m.flash = { text = err, untilT = os.clock() + 3 } end
+    m.flash = { text = ok and "Wlaczono reaktor" or err, untilT = os.clock() + 3, ok = ok }
   elseif id == "scram" then
     ctx.auto.scram(d)
+    m.flash = { text = "Wylaczono reaktor (SCRAM)", untilT = os.clock() + 3, ok = true }
   elseif id == "reset" then
     ctx.auto.reset(d.name)
+    m.flash = { text = "Reset zabezpieczenia", untilT = os.clock() + 3, ok = true }
   elseif id == "burn" then
     local delta = btn.data
     local cur = U.call(d.p, "getBurnRate") or 0
     local max = U.call(d.p, "getMaxBurnRate") or 0
     local new = U.clamp(U.round(cur + delta, 1), 0, max)
     local ok, err = pcall(d.p.setBurnRate, new)
-    if not ok then m.flash = { text = tostring(err), untilT = os.clock() + 3 } end
+    m.flash = { text = ok and string.format("Burn rate: %.1f mB/t", new) or tostring(err), untilT = os.clock() + 3, ok = ok }
   end
 end
 

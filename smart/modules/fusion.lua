@@ -43,7 +43,9 @@ end
 function mod.draw(ctx, m, c)
   local st, o = m.state, m.opts
   local title = M.title(m, "Reaktor fusion")
-  if not st.dev then return M.message(c, m, title, { "Brak reaktora fuzyjnego", "Podlacz Logic Adapter / Reactor Port" }) end
+  if not st.dev then
+    return M.message(c, m, title, M.portHint({ "Brak reaktora fuzyjnego", "Podlacz modemem Fusion Reactor", "Logic Adapter" }, "fusionport"))
+  end
   title = M.title(m, D.label(st.dev))
   if not st.formed then return M.message(c, m, title, { "Reaktor nieuformowany" }) end
   c:clear(colors.black)

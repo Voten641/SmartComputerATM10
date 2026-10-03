@@ -19,6 +19,25 @@ function M.message(c, m, title, lines)
   end
 end
 
+-- pasek potwierdzenia na dole ekranu: zielony = OK, czerwony = blad (m.flash = { text, untilT, ok })
+function M.flash(c, m)
+  local f = m.flash
+  if not f or f.untilT <= os.clock() then return end
+  local bg = f.ok and colors.green or colors.red
+  c:rect(1, c.h, c.w, 1, bg)
+  c:center(c.h, f.text, colors.white, bg)
+end
+
+-- podpowiedz gdy podlaczono Reactor Port zamiast Logic Adaptera
+function M.portHint(lines, portKind)
+  if #D.byKind(portKind) > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Wykryto Reactor Port - on NIE daje danych!"
+    lines[#lines + 1] = "Postaw modem na Logic Adapterze."
+  end
+  return lines
+end
+
 -- pierwsze aktywne urzadzenie dla modulu jednego urzadzenia
 function M.single(m, kinds)
   local list = D.sources(m.cfg.source, kinds)

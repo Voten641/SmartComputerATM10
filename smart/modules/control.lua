@@ -41,12 +41,18 @@ function mod.draw(ctx, m, c)
       end
     end
   end
+  M.flash(c, m)
 end
 
 function mod.touch(ctx, m, btn)
   if btn.id == "ctl" then
     ctx.auto.toggleControl(ctx.cfg, btn.data)
     ctx.save()
+    local c = ctx.cfg.controls[btn.data]
+    if c then
+      m.flash = { text = c.mode == "pulse" and ("Impuls: " .. c.label) or ((c.state and "Wlaczono: " or "Wylaczono: ") .. c.label),
+        untilT = os.clock() + 2, ok = true }
+    end
   end
 end
 

@@ -59,6 +59,10 @@ Na brak połączenia zwraca `nil, "NOT_CONNECTED"`.
 
 ## Mekanism 10.7
 
+- **Reactor Porty (`fissionReactorPort`, `fusionReactorPort`) NIE udostepniaja reaktora** – nadpisuja
+  `exposesMultiblockToComputer()` na `false`, wiec maja tylko `getMode/setMode/incrementMode/decrementMode`
+  (bez `isFormed`, temperatury, `scram`...). Dane i sterowanie reaktora: **wylacznie Logic Adapter**.
+  Pozostale multibloki (zawory turbiny/boilera/tanku, Induction Port, SPS Port, Evaporation Valve) udostepniaja dane normalnie.
 - Typy (camelCase): `fissionReactorLogicAdapter`, `fissionReactorPort`, `turbineValve`, `boilerValve`, `inductionPort`,
   `fusionReactorLogicAdapter`, `fusionReactorPort`, `dynamicValve`, `spsPort`, `thermalEvaporationValve`,
   `thermalEvaporationController`, `{basic,advanced,elite,ultimate,creative}EnergyCube`, `...ChemicalTank`, `...FluidTank`, `industrialAlarm`, `qioDriveArray`...

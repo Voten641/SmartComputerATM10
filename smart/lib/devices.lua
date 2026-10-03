@@ -50,11 +50,13 @@ local TYPE_MAP = {
   createrotationspeedcontroller = "rsc",
   -- Mekanism (camelCase)
   fissionreactorlogicadapter = "fission",
-  fissionreactorport = "fission",
+  -- Reactor Porty NIE udostepniaja danych reaktora (Mekanism: exposesMultiblockToComputer = false),
+  -- tylko tryb portu (getMode/setMode). Dane reaktora daje wylacznie Logic Adapter.
+  fissionreactorport = "fissionport",
   turbinevalve = "turbine",
   boilervalve = "boiler",
   fusionreactorlogicadapter = "fusion",
-  fusionreactorport = "fusion",
+  fusionreactorport = "fusionport",
   inductionport = "matrix",
   dynamicvalve = "dyntank",
   spsport = "sps",
@@ -86,6 +88,8 @@ D.KINDS = {
   turbine = "Turbina",
   boiler = "Boiler",
   fusion = "Reaktor Fusion",
+  fissionport = "Fission Port (bez danych)",
+  fusionport = "Fusion Port (bez danych)",
   matrix = "Induction Matrix",
   dyntank = "Dynamic Tank",
   sps = "SPS",
@@ -208,10 +212,23 @@ function D.isActive(dev)
   return not dev.dupOf and not dev.disabled and not (D.cfg and D.cfg.hidden[dev.name])
 end
 
--- multiblok Mekanism: metody sa dostepne tylko gdy jest uformowany
+-- metoda, ktora ma kazdy uformowany multiblok danego rodzaju
+local FORMED_METHOD = {
+  fission = "getStatus", turbine = "getProductionRate", boiler = "getBoilRate", fusion = "isIgnited",
+  matrix = "getLastInput", dyntank = "getStored", sps = "getProcessRate", evap = "getProductionAmount",
+}
+
+-- multiblok Mekanism: metody sa dostepne tylko gdy jest uformowany. Mekanism podpina je przy
+-- tworzeniu peryferium; jesli opakowanie jest sprzed uformowania, oznaczamy potrzebe ponownego skanu.
 function D.formed(dev)
   if not D.MULTIBLOCK[dev.kind] then return true end
-  return U.call(dev.p, "isFormed") == true
+  local formed = U.call(dev.p, "isFormed") == true
+  local key = FORMED_METHOD[dev.kind]
+  if formed and key and not U.has(dev.p, key) then
+    D.stale = true
+    return false
+  end
+  return formed
 end
 
 function D.byKind(kinds)

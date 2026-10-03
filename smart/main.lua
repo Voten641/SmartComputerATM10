@@ -57,6 +57,18 @@ function ctx.reload()
   os.queueEvent("smart_wake")
 end
 
+-- dzwiek potwierdzenia klikniecia (glosniki w sieci): wysoki = OK, niski = blad
+function ctx.feedback(ok)
+  if not ctx.cfg.clickSound then return end
+  for _, s in ipairs(D.byKind("speaker")) do
+    pcall(s.p.playNote, ok and "pling" or "bass", ok and 1 or 2, ok and 18 or 4)
+  end
+end
+
+-- automatyka zmienila stan przelacznikow (np. SCRAM wylaczyl polaczony przelacznik)
+A.cfg = ctx.cfg
+A.onChange = function() pcall(ctx.save) end
+
 function ctx.moduleName(id)
   local m = ctx.modules[id]
   return m and m.name or "(nieprzypisany)"
@@ -188,6 +200,8 @@ function ctx.identify(name)
 end
 
 local function tick()
+  -- multiblok uformowal sie po opakowaniu peryferium -> ponowny skan
+  if D.stale then D.stale = false; ctx.dirty = true end
   if ctx.dirty then rebuild() end
   local ok, err = pcall(A.tick, ctx.cfg)
   if not ok then A.logEvent("Blad automatyki: " .. tostring(err), "crit") end
@@ -225,10 +239,17 @@ local function eventLoop()
           m.cfg.module = btn.data
           m.cfg.opts = {}
           ctx.save()
+          ctx.feedback(true)
           ctx.reload()
         elseif btn and mod and mod.touch then
+          m.flash = nil
           local ok, err = pcall(mod.touch, ctx, m, btn)
-          if not ok then A.logEvent("Dotyk: " .. tostring(err), "warn") end
+          if not ok then
+            A.logEvent("Dotyk: " .. tostring(err), "warn")
+            m.flash = { text = tostring(err), untilT = os.clock() + 3, ok = false }
+          end
+          -- blad = modul ustawil czerwony pasek (flash bez ok)
+          ctx.feedback(not (m.flash and not m.flash.ok))
           updateMonitor(m)
           render(m)
         end

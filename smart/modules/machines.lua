@@ -38,6 +38,9 @@ local function metric(d)
     return U.fmt(U.call(p, "getProductionAmount"), "mB/t"), U.call(p, "getInputFilledPercentage"), colors.lightBlue
   elseif k == "dyntank" then
     return U.pct(U.call(p, "getFilledPercentage")), U.call(p, "getFilledPercentage"), colors.blue
+  elseif k == "fissionport" or k == "fusionport" then
+    local mode = U.call(p, "getMode")
+    return "tryb " .. tostring(mode) .. " (uzyj Logic Adaptera)", nil, colors.orange
   elseif k == "powahreactor" then
     local on = U.call(p, "isRunning")
     return (on and "ON " or "OFF ") .. "T " .. U.round(U.call(p, "getTemperature") or 0) .. "%", (U.call(p, "getFuel") or 0) / 100, colors.lime

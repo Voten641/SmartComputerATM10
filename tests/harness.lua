@@ -311,7 +311,11 @@ local fissionMethods = {
   getMaxPos = function() return { x = 4, y = 65, z = 4 } end,
 }
 add("fissionReactorLogicAdapter_0", { "fissionReactorLogicAdapter" }, fissionMethods)
-add("fissionReactorPort_0", { "fissionReactorPort" }, fissionMethods) -- ten sam reaktor -> duplikat
+-- Reactor Port w Mekanism 10.7 NIE udostepnia multibloku (exposesMultiblockToComputer = false)
+add("fissionReactorPort_0", { "fissionReactorPort" }, {
+  getMode = function() return "INPUT" end, setMode = function() end,
+  incrementMode = function() end, decrementMode = function() end,
+})
 
 local matrixE = 4e12
 add("inductionPort_0", { "inductionPort" }, {
@@ -414,7 +418,8 @@ local chatMsgs = {}
 add("chat_box_0", { "chat_box" }, {
   sendMessage = function(msg, opts) assert(type(opts) == "table") chatMsgs[#chatMsgs + 1] = msg; return true end,
 })
-add("speaker_0", { "speaker" }, { playNote = function(i, v, p) assert(v <= 3 and p <= 24) return true end })
+notes = {}
+add("speaker_0", { "speaker" }, { playNote = function(i, v, p) assert(v <= 3 and p <= 24) notes[#notes + 1] = i return true end })
 local relayOut = {}
 add("redstone_relay_0", { "redstone_relay" }, {
   setOutput = function(s, v) relayOut[s] = v end, getOutput = function(s) return relayOut[s] == true end, getInput = function() return false end,
@@ -489,6 +494,10 @@ os.execute("mkdir -p " .. TMP .. "/smart/data")
 local cfg = { monitors = {}, controls = {
   { label = "Lampy", target = "redstone_relay_0", side = "top", mode = "toggle", state = false, color = "yellow", tags = "energia" },
   { label = "Brama", target = "computer", side = "back", mode = "pulse", state = false, color = "lime" },
+  { label = "Zasilanie reaktora", target = "redstone_relay_0", side = "left", mode = "toggle", state = false, color = "lime",
+    link = "fissionReactorLogicAdapter_0", tags = "energia" },
+  { label = "Pompa uranu", target = "redstone_relay_0", side = "right", mode = "toggle", state = false, color = "lime",
+    link = "powah:reactor_part_0", linkSync = false },
 }, alarms = { chat = { enabled = true, player = "Voten641", prefix = "Baza" } } }
 for i, id in ipairs(MODS) do cfg.monitors["monitor_" .. i] = { module = id, scale = 1, accent = "cyan", opts = {} } end
 cfg.monitors.monitor_big = { module = "energy", scale = 0.5, accent = "orange", opts = {} }
@@ -654,18 +663,35 @@ at(11, function()
     check(findText(bigMon, t) ~= nil, "Zrodla: brak '" .. t .. "'")
   end
   check(findText(bigMon, "crusher_0") == nil, "Zrodla: kruszarka nie jest zrodlem")
+  check(findText(bigMon, "BRAK DANYCH") ~= nil, "Zrodla: Reactor Port powinien miec 'BRAK DANYCH'")
+  check(findText(bigMon, "nieuformowany") == nil or findText(bigMon, "turbineValve_0") ~= nil, "Zrodla: falszywe 'nieuformowany'")
+  -- przelacznik polaczony z reaktorem: w bloku reaktora, nie w sekcji Przelaczniki
+  check(findText(bigMon, "+ Zasilanie reaktora WYL") ~= nil, "polaczony przelacznik nie widoczny w bloku reaktora")
+  local _, hy = findText(bigMon, "Przelaczniki")
+  local _, zy = findText(bigMon, "Zasilanie reaktora")
+  check(hy and zy and zy < hy, "polaczony przelacznik wyswietla sie osobno")
+  check(findText(bigMon, "Pompa uranu [WYL]") ~= nil, "przelacznik bez 'razem' powinien miec wlasny przycisk w bloku")
   touchBelow(bigMon, "monitor_big", "gasBurningGenerator_0", "WLACZ")
   touchBelow(bigMon, "monitor_big", "fissionReactorLogicAdapter_0", "WLACZ")
+  touchBelow(bigMon, "monitor_big", "powah:reactor_part_0", "Pompa uranu [")
+  notesBefore = #notes
 end)
 at(12, function()
   check(genMode == "DISABLED", "generator nie wlaczony (tryb " .. genMode .. ")")
   check(reactor.active, "reaktor nie wlaczony z zakladki Zrodla")
+  check(relayOut.left == true, "przelacznik polaczony z reaktorem nie wlaczyl sie razem z nim")
+  check(relayOut.right == true, "przycisk Pompa uranu w bloku Powah nie zadzialal")
+  local pl = false
+  for k = notesBefore + 1, #notes do if notes[k] == "pling" then pl = true end end
+  check(pl, "brak dzwieku potwierdzenia")
+  check(findText(bigMon, "Wlaczono") ~= nil, "brak zielonego paska potwierdzenia")
   touchBelow(bigMon, "monitor_big", "Przelaczniki", "Lampy")
   touchBelow(bigMon, "monitor_big", "fissionReactorLogicAdapter_0", "WYLACZ")
 end)
 at(13, function()
   check(relayOut.top == false, "przelacznik Lampy nie przelaczony z zakladki Zrodla")
   check(not reactor.active, "reaktor nie wylaczony z zakladki Zrodla")
+  check(relayOut.left == false, "przelacznik polaczony nie wylaczyl sie razem z reaktorem")
   check(findText(bigMon, "25.0kFE/t") ~= nil or findText(bigMon, "10.0kFE/t") ~= nil, "brak produkcji generatora")
   screensExtra = dump(bigMon, "monitor_big: energia / zakladka Zrodla")
 end)
@@ -716,7 +742,9 @@ local fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n
 local saved = textutils.unserialize(io.open(TMP .. "/smart/data/config.lua"):read("a"))
 check(saved and saved.monitors.monitor_new and saved.monitors.monitor_new.module == "energy", "wybor modulu z monitora nie zapisany")
 check(saved and saved.refresh == 2, "zmiana odswiezania z GUI nie zapisana")
-check(saved and saved.controls[3] and saved.controls[3].label == "Pompa", "nowy przelacznik nie zapisany")
+local foundPompa = false
+for _, c in ipairs(saved and saved.controls or {}) do if c.label == "Pompa" then foundPompa = true end end
+check(foundPompa, "nowy przelacznik nie zapisany")
 check(#chatMsgs > 0, "brak powiadomien na chat")
 local hasScram = false
 for _, c in ipairs(calls) do if c == "scram" then hasScram = true end end

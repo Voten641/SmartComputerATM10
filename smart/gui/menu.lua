@@ -451,6 +451,27 @@ function Screens.control(i)
           choices = function() return { "toggle", "pulse" } end }),
         cfgRow("choice", "Kolor (WL)", c, "color", { choices = function() return UI.COLOR_NAMES end }),
         {
+          type = "choice", label = "Polacz z urzadzeniem",
+          labels = (function()
+            local l = { none = "(brak)" }
+            for _, d in ipairs(D.list) do l[d.name] = D.label(d) .. " - " .. D.kindLabel(d.kind) end
+            return l
+          end)(),
+          choices = function()
+            local Src = require("lib.sources")
+            local r = { "none" }
+            for _, d in ipairs(D.list) do if Src.isSource(ctx.cfg, d) then r[#r + 1] = d.name end end
+            return r
+          end,
+          get = function() return c.link or "none" end,
+          set = function(v) c.link = v ~= "none" and v or nil; changed() end,
+        },
+        {
+          type = "toggle", label = "  steruj razem z urzadzeniem",
+          get = function() return c.linkSync ~= false end,
+          set = function(v) c.linkSync = v; changed() end,
+        },
+        {
           type = "toggle", label = "W zrodlach energii (tag)",
           get = function() return require("lib.sources").hasTag(c.tags, "energia") end,
           set = function(v) c.tags = require("lib.sources").setTag(c.tags, "energia", v); changed() end,
@@ -545,6 +566,7 @@ function Screens.settings()
         cfgRow("text", "Nazwa bazy", cfg, "title"),
         cfgRow("number", "Odswiezanie (s)", cfg, "refresh", { min = 0.5, max = 10, step = 0.5 }),
         cfgRow("number", "Lista ME/RS co N odswiezen", cfg, "itemsEvery", { min = 1, max = 60, step = 1 }),
+        cfgRow("toggle", "Dzwiek klikniecia (glosnik)", cfg, "clickSound"),
         { type = "header", label = "Historia (wykresy)" },
         cfgRow("number", "Probka co (s)", cfg.history, "interval", { min = 10, max = 600, step = 10 }),
         cfgRow("number", "Ilosc probek", cfg.history, "points", { min = 60, max = 4320, step = 60 }),

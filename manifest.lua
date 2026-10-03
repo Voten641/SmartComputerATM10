@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.1.0",
+  version = "1.1.1",
   files = {
     "install.lua",
     "update.lua",
@@ -48,16 +48,9 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Autocrafting ME/RS (utrzymywanie zapasow)",
-    "Wyszukiwarka ME/RS z wydawaniem do skrzyni",
-    "Create: stres, RPM, sterowanie Speed Controller",
-    "Detektory przeplywu z kontrola limitu",
-    "Promieniowanie + alarm",
-    "Historia na dysku i wykresy 1h/6h/24h",
-    "Wyswietlacze Create (Source Block)",
-    "Pilot na Pocket Computer",
-    "Energia: usredniony bilans i stabilny czas rozladowania",
-    "Energia: zakladka Zrodla (reaktory, generatory, Powah, sterowanie)",
-    "Tagi urzadzen i przelacznikow (tag energia)",
+    "Naprawa: Reactor Port nie byl reaktorem (wymagany Logic Adapter) - koniec 'nieuformowany'",
+    "Automatyczny ponowny skan gdy multiblok uformuje sie po starcie",
+    "Laczenie przelacznika redstone z urzadzeniem (jeden blok na zakladce Zrodla, sterowanie razem)",
+    "Dzwiek i pasek potwierdzenia po kliknieciu na monitorze",
   },
 }

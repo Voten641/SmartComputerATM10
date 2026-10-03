@@ -147,53 +147,109 @@ function S.read(ctx, d)
   return e
 end
 
+local MAIN_CMD = { start = true, scram = true, rsmode = true }
+
+-- przelaczniki polaczone z urzadzeniem: dolaczamy je do jego bloku
+local function attachControls(ctx, e, used)
+  local hasMain = false
+  for _, b in ipairs(e.buttons) do if MAIN_CMD[b.cmd] then hasMain = true end end
+  local linked = {}
+  for i, c in ipairs(ctx.cfg.controls) do
+    if c.link == e.name then
+      used[i] = true
+      local on = c.state and c.mode ~= "pulse"
+      linked[#linked + 1] = c.label .. (c.mode == "pulse" and "" or (on and " WL" or " WYL"))
+      -- "steruj razem": glowny przycisk urzadzenia przelacza tez redstone, osobny przycisk zbedny
+      if not (c.linkSync ~= false and hasMain) then
+        e.buttons[#e.buttons + 1] = {
+          label = c.label .. (c.mode == "pulse" and "" or (on and " [WL]" or " [WYL]")),
+          fg = on and colors.black or colors.white, bg = on and (colors[c.color] or colors.lime) or colors.gray,
+          cmd = "control", arg = i,
+        }
+      end
+    end
+  end
+  if #linked > 0 then
+    e.info = (e.info and (e.info .. "  ") or "") .. "+ " .. table.concat(linked, ", ")
+  end
+end
+
 -- wszystkie zrodla + przelaczniki redstone z tagiem "energia"
 function S.collect(ctx)
   local list, total = {}, 0
+  local used = {}
   for _, d in ipairs(D.list) do
     if S.isSource(ctx.cfg, d) then
       local ok, e = pcall(S.read, ctx, d)
       if ok then
+        attachControls(ctx, e, used)
         list[#list + 1] = e
         if type(e.prod) == "number" then total = total + e.prod end
       end
     end
   end
+  -- Reactor Port zamiast Logic Adaptera: pokazujemy wpis z instrukcja
+  for _, d in ipairs(D.byKind({ "fissionport", "fusionport" })) do
+    list[#list + 1] = {
+      name = d.name, label = D.label(d), kindLabel = D.kindLabel(d.kind), buttons = {},
+      status = "BRAK DANYCH", scol = colors.red,
+      info = "Reactor Port nie daje danych - uzyj Logic Adaptera",
+    }
+  end
   local controls = {}
   for i, c in ipairs(ctx.cfg.controls) do
-    if S.hasTag(c.tags, S.TAG) then controls[#controls + 1] = { index = i, label = c.label, state = c.state, mode = c.mode, color = c.color } end
+    if not used[i] and S.hasTag(c.tags, S.TAG) then controls[#controls + 1] = { index = i, label = c.label, state = c.state, mode = c.mode, color = c.color } end
   end
   return list, controls, total
 end
 
+-- wykonuje akcje z przycisku; zwraca ok, komunikat (do paska i dzwieku potwierdzenia)
 function S.action(ctx, cmd, name, arg)
   if cmd == "control" then
+    local c = ctx.cfg.controls[arg]
+    if not c then return false, "brak przelacznika" end
     ctx.auto.toggleControl(ctx.cfg, arg)
     ctx.save()
-    return true
+    if c.mode == "pulse" then return true, "Impuls: " .. c.label end
+    return true, (c.state and "Wlaczono: " or "Wylaczono: ") .. c.label
   end
   local d = D.get(name)
   if not d then return false, "brak urzadzenia" end
-  local p = d.p
-  if cmd == "start" then return ctx.auto.start(d)
-  elseif cmd == "scram" then ctx.auto.scram(d) return true
-  elseif cmd == "reset" then ctx.auto.reset(name) return true
+  local p, label = d.p, D.label(d)
+  local function res(ok, err, okText)
+    if ok then return true, okText end
+    return false, tostring(err)
+  end
+  if cmd == "start" then
+    local ok, err = ctx.auto.start(d)
+    return res(ok, err, "Wlaczono: " .. label)
+  elseif cmd == "scram" then
+    ctx.auto.scram(d)
+    return true, "Wylaczono: " .. label
+  elseif cmd == "reset" then
+    ctx.auto.reset(name)
+    return true, "Reset zabezpieczenia: " .. label
   elseif cmd == "burn" then
     local cur, max = U.call(p, "getBurnRate") or 0, U.call(p, "getMaxBurnRate") or 0
-    local ok, err = pcall(p.setBurnRate, U.clamp(U.round(cur + arg, 1), 0, max))
-    return ok, err and tostring(err)
+    local new = U.clamp(U.round(cur + arg, 1), 0, max)
+    local ok, err = pcall(p.setBurnRate, new)
+    return res(ok, err, string.format("Burn rate: %.1f mB/t", new))
   elseif cmd == "inj" then
     local cur = U.call(p, "getInjectionRate") or 0
-    local ok, err = pcall(p.setInjectionRate, U.clamp(cur + arg, 0, 98))
-    return ok, err and tostring(err)
+    local new = U.clamp(cur + arg, 0, 98)
+    local ok, err = pcall(p.setInjectionRate, new)
+    return res(ok, err, "Wtrysk: " .. new .. " mB/t")
   elseif cmd == "dump" then
     local ok, err = pcall(p.incrementDumpingMode)
-    return ok, err and tostring(err)
+    return res(ok, err, "Zmieniono tryb zrzutu")
   elseif cmd == "rsmode" then
     -- wymaga publicznego security maszyny (Mekanism)
     local ok, err = pcall(p.setRedstoneMode, arg)
-    if ok then ctx.auto.logEvent((arg == "DISABLED" and "WL: " or "WYL: ") .. D.label(d)) end
-    return ok, err and tostring(err)
+    if ok then
+      ctx.auto.logEvent((arg == "DISABLED" and "WL: " or "WYL: ") .. label)
+      ctx.auto.syncLinked(name, arg == "DISABLED")
+    end
+    return res(ok, err, (arg == "DISABLED" and "Wlaczono: " or "Wylaczono: ") .. label)
   end
   return false, "nieznana komenda"
 end

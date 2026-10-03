@@ -73,6 +73,19 @@ Urządzeniom i przełącznikom redstone można nadać tagi (*Menu → Urządzeni
 Tag `energia` sprawia, że urządzenie lub przełącznik pojawia się w zakładce **Źródła** na ekranie energii
 (np. przełącznik włączający generatory redstonem albo magazyn, który nie został rozpoznany automatycznie).
 
+### Łączenie przełącznika z urządzeniem
+
+W *Menu → Panel sterowania → (przełącznik)* ustaw **Połącz z urządzeniem** (np. reaktor). Na zakładce
+**Źródła** przełącznik pokazuje się w bloku tego urządzenia, a nie osobno. Przy włączonym
+**steruj razem z urządzeniem** przycisk WŁĄCZ/WYŁĄCZ urządzenia przełącza też redstone – również przy
+automatycznym SCRAM i auto start/stop. Bez tej opcji przełącznik ma własny przycisk w bloku urządzenia.
+
+### Potwierdzenie kliknięcia
+
+Po dotknięciu przycisku na monitorze glośnik (Speaker w sieci) gra wysoki dźwięk przy sukcesie i niski przy
+błędzie, a na dole ekranu pojawia się zielony/czerwony pasek z opisem (np. „Wlaczono: Reaktor”).
+Dźwięk można wyłączyć w *Ustawieniach*.
+
 Generatory i maszyny Mekanism są włączane/wyłączane przez tryb redstone (WŁ = „ignoruj redstone”,
 WYŁ = „wymaga sygnału”); wymaga to publicznego trybu security maszyny.
 
@@ -96,6 +109,11 @@ innym wyświetlaczem Create. W *Menu → Wyświetlacze Create* wybierasz, co pok
 3. Pilot: stan bazy, START/SCRAM/RESET i burn rate reaktorów, przełączniki redstone, alarmy.
 
 PIN chroni przed przypadkowym sterowaniem, ale wiadomości rednet nie są szyfrowane.
+
+## Reaktor: podłącz Logic Adapter, nie Reactor Port
+
+W Mekanism 10.7 **Fission/Fusion Reactor Port** nie udostępnia komputerowi danych reaktora (tylko tryb portu).
+Modem musi stać na **Reactor Logic Adapterze**. System wykrywa podłączony port i wyświetla podpowiedź.
 
 ## Zabezpieczenie reaktora
 
