@@ -1,8 +1,10 @@
 -- Autostart Smart System (CC:Tweaked uruchamia wszystkie pliki z /startup/)
-if not fs.exists("/smart/main.lua") then return end
+-- Pocket Computer = pilot, komputer = pelny system
+local program = pocket and "/smart/pocket.lua" or "/smart/main.lua"
+if not fs.exists(program) then return end
 
 while true do
-  local ok = shell.run("/smart/main.lua")
+  local ok = shell.run(program)
   if ok then break end -- normalne wyjscie (menu > Wyjdz / Ctrl+T)
   printError("Smart System padl. Restart za 5s... (dowolny klawisz = anuluj)")
   local t = os.startTimer(5)

@@ -27,7 +27,7 @@ colors = {}
 local CN = { "white", "orange", "magenta", "lightBlue", "yellow", "lime", "pink", "gray", "lightGray", "cyan", "purple", "blue", "brown", "green", "red", "black" }
 for i, n in ipairs(CN) do colors[n] = 2 ^ (i - 1) end
 colours = colors
-keys = { backspace = 14, up = 200, down = 208, pageUp = 201, pageDown = 209, enter = 28 }
+keys = { q = 16, backspace = 14, up = 200, down = 208, pageUp = 201, pageDown = 209, enter = 28 }
 
 ---------------------------------------------------------------------------
 -- terminal z buforem
@@ -353,6 +353,13 @@ add("dynamicValve_0", { "dynamicValve" }, {
 add("basicEnergyCube_0", { "basicEnergyCube" }, {
   getEnergy = function() return 2e6 end, getMaxEnergy = function() return 4e6 end, getEnergyFilledPercentage = function() return 0.5 end,
 })
+genMode = "HIGH"
+add("gasBurningGenerator_0", { "gasBurningGenerator" }, {
+  getEnergy = function() return 5e5 end, getMaxEnergy = function() return 1e6 end, getEnergyFilledPercentage = function() return 0.5 end,
+  getProductionRate = function() return genMode == "DISABLED" and 25000 or 0 end, getMaxOutput = function() return 50000 end,
+  getRedstoneMode = function() return genMode end,
+  setRedstoneMode = function(m) assert(m == "DISABLED" or m == "HIGH" or m == "LOW" or m == "PULSE") genMode = m end,
+})
 add("crusher_0", { "crusher" }, {
   getEnergy = function() return 1000 end, getMaxEnergy = function() return 20000 end, getEnergyFilledPercentage = function() return 0.05 end,
 })
@@ -365,6 +372,7 @@ add("powah:reactor_part_0", { "powah:reactor_part", "uraninite_reactor", "energy
   getStoredEnergy = function() return 1 end, getMaxEnergy = function() return 2 end,
 })
 local items = {}
+crafts, exports = {}, {}
 for i = 1, 40 do items[i] = { name = "minecraft:item_" .. i, displayName = "Przedmiot " .. i, count = i * 37, isCraftable = i % 5 == 0 } end
 add("me_bridge_0", { "me_bridge" }, {
   isConnected = function() return true end, isOnline = function() return true end,
@@ -374,6 +382,23 @@ add("me_bridge_0", { "me_bridge" }, {
   getStoredEnergy = function() return 1000 end, getEnergyCapacity = function() return 1600 end,
   getEnergyUsage = function() return 55.5 end, getCraftingTasks = function() return { {}, {} } end,
   getCraftingCPUs = function() return { { isBusy = true }, { isBusy = false } } end,
+  getItem = function(f)
+    assert(type(f) == "table" and f.name, "getItem bez filtra")
+    for _, it in ipairs(items) do if it.name == f.name then return it end end
+    return nil, "NOT_FOUND"
+  end,
+  isCrafting = function(f) assert(f.type == "item" and f.name) return false end,
+  craftItem = function(f)
+    assert(type(f.name) == "string" and type(f.count) == "number")
+    if f.name == "minecraft:nopattern" then return nil, "NOT_CRAFTABLE" end
+    crafts[#crafts + 1] = f.name .. " x" .. f.count
+    return { getId = function() return 1 end }
+  end,
+  exportItem = function(target, f)
+    assert(type(target) == "string" and type(f) == "table")
+    exports[#exports + 1] = target .. " " .. f.name .. " x" .. f.count
+    return f.count
+  end,
 })
 add("player_detector_0", { "player_detector" }, {
   getOnlinePlayers = function() return { "Voten641", "Steve" } end,
@@ -382,8 +407,9 @@ add("player_detector_0", { "player_detector" }, {
 add("environment_detector_0", { "environment_detector" }, {
   isRaining = function() return true end, isThunder = function() return false end,
   getMoon = function() return 3, "Waning crescent" end, getBiome = function() return "minecraft:plains" end,
-  getDimension = function() return "minecraft:overworld" end, getRadiationRaw = function() return 0.00000001 end,
+  getDimension = function() return "minecraft:overworld" end, getRadiationRaw = function() return radiation end,
 })
+radiation = 0.0000001
 local chatMsgs = {}
 add("chat_box_0", { "chat_box" }, {
   sendMessage = function(msg, opts) assert(type(opts) == "table") chatMsgs[#chatMsgs + 1] = msg; return true end,
@@ -393,15 +419,37 @@ local relayOut = {}
 add("redstone_relay_0", { "redstone_relay" }, {
   setOutput = function(s, v) relayOut[s] = v end, getOutput = function(s) return relayOut[s] == true end, getInput = function() return false end,
 })
-add("Create_Stressometer_0", { "Create_Stressometer" }, { getStress = function() return 512 end, getStressCapacity = function() return 1024 end })
+stress = 512
+add("Create_Stressometer_0", { "Create_Stressometer" }, { getStress = function() return stress end, getStressCapacity = function() return 1024 end })
+rpm = 0
+add("Create_RotationSpeedController_0", { "Create_RotationSpeedController" }, {
+  getTargetSpeed = function() return rpm end,
+  setTargetSpeed = function(v) assert(v == math.floor(v), "setTargetSpeed wymaga int") rpm = v end,
+})
+limits = { energy_detector_0 = 1000, fluid_detector_0 = 500 }
+local function detector(name, t, rate)
+  add(name, { t }, {
+    getTransferRate = function() return rate end,
+    getTransferRateLimit = function() return limits[name] end,
+    setTransferRateLimit = function(v) limits[name] = v end,
+    getMaxTransferRate = function() return 1000000 end,
+  })
+end
+detector("fluid_detector_0", "fluid_detector", 250)
+sourceTerm = makeTerm(20, 2)
+add("create_source_0", { "create_source" }, sourceTerm)
+add("back", { "modem" }, { isWireless = function() return true end })
 add("create_target_0", { "create_target" }, { getLine = function() return "Hello Create" end })
 add("minecraft:chest_0", { "minecraft:chest", "inventory" }, {
   size = function() return 27 end, list = function() return { [1] = { name = "x", count = 1 }, [5] = { name = "y", count = 2 } } end,
 })
-add("energy_detector_0", { "energy_detector" }, { getTransferRate = function() return 2048 end })
+detector("energy_detector_0", "energy_detector", 2048)
 add("chat_box_disabled", { "chat_box" }, { peripheralDisabled = function() return true end })
 
-local MODS = { "overview", "energy", "fission", "turbine", "boiler", "fusion", "storage", "tanks", "machines", "players", "clock", "control", "alarms" }
+local MODS = { "overview", "energy", "fission", "turbine", "boiler", "fusion", "storage", "tanks", "machines", "players", "clock", "control", "alarms",
+  "mesearch", "autocraft", "create", "flow", "radiation", "history" }
+local MONNAME = {}
+for i, id in ipairs(MODS) do MONNAME[id] = "monitor_" .. i end
 local mons = {}
 for i, id in ipairs(MODS) do mons[id] = monitor("monitor_" .. i, i % 2 == 0 and 39 or 29, i % 3 == 0 and 26 or 19) end
 local bigMon = monitor("monitor_big", 79, 38)
@@ -412,21 +460,48 @@ peripheral = {}
 function peripheral.getNames() local r = {} for n in pairs(devs) do r[#r + 1] = n end table.sort(r) return r end
 function peripheral.getType(n) local d = devs[n]; if d then return table.unpack(d.types) end end
 function peripheral.wrap(n) return devs[n] and devs[n].m end
+function peripheral.find(t, filter)
+  for _, n in ipairs(peripheral.getNames()) do
+    for _, ty in ipairs(devs[n].types) do
+      if ty == t and (not filter or filter(n, devs[n].m)) then return devs[n].m end
+    end
+  end
+end
+function peripheral.getName(m) for n, d in pairs(devs) do if d.m == m then return n end end end
 
 mekanismEnergyHelper = { joulesToFE = function(j) return math.floor(j / 2.5) end }
 local rsOut = {}
 redstone = { setOutput = function(s, v) rsOut[s] = v end, getInput = function() return false end }
 shell = { run = function() return true end }
+rednetSent = {}
+local openModems = {}
+rednet = {
+  open = function(n) openModems[n] = true end,
+  isOpen = function(n) return openModems[n] == true end,
+  host = function(p, h) assert(p and h) rednetHost = h end,
+  unhost = function() rednetHost = nil end,
+  send = function(id, msg, proto) rednetSent[#rednetSent + 1] = { id = id, msg = msg, proto = proto } return true end,
+}
 http = {}
 
 -- konfiguracja startowa: kazdy modul na swoim monitorze
 os.execute("mkdir -p " .. TMP .. "/smart/data")
 local cfg = { monitors = {}, controls = {
-  { label = "Lampy", target = "redstone_relay_0", side = "top", mode = "toggle", state = false, color = "yellow" },
+  { label = "Lampy", target = "redstone_relay_0", side = "top", mode = "toggle", state = false, color = "yellow", tags = "energia" },
   { label = "Brama", target = "computer", side = "back", mode = "pulse", state = false, color = "lime" },
 }, alarms = { chat = { enabled = true, player = "Voten641", prefix = "Baza" } } }
 for i, id in ipairs(MODS) do cfg.monitors["monitor_" .. i] = { module = id, scale = 1, accent = "cyan", opts = {} } end
-cfg.monitors.monitor_big = { module = "overview", scale = 0.5, accent = "orange", opts = {} }
+cfg.monitors.monitor_big = { module = "energy", scale = 0.5, accent = "orange", opts = {} }
+cfg.tags = { ["powah:energy_cell_0"] = "energia" }
+cfg.monitors[MONNAME.energy].opts = { avg = 30 }
+cfg.monitors[MONNAME.mesearch].opts = { target = "@up" }
+cfg.autocraft = { enabled = true, bridge = "auto", every = 1, items = {
+  { name = "minecraft:item_3", label = "", keep = 1000, batch = 64, enabled = true },
+  { name = "minecraft:item_40", label = "Pelny", keep = 10, batch = 64, enabled = true },
+  { name = "minecraft:nopattern", label = "", keep = 5, batch = 64, enabled = true },
+} }
+cfg.remote = { enabled = true, pin = "1234" }
+cfg.history = { interval = 1, points = 100 }
 cfg.monitors.monitor_tiny = { module = "fission", scale = 0.5, accent = "red", opts = {} }
 local f = io.open(TMP .. "/smart/data/config.lua", "w"); f:write(textutils.serialize(cfg)); f:close()
 
@@ -441,6 +516,24 @@ local function touchText(monName, mon, text)
   check(x ~= nil, "nie znaleziono '" .. text .. "' na " .. monName)
   if x then os.queueEvent("monitor_touch", monName, x + 1, y) end
 end
+local function touchLast(id, text)
+  local mon = mons[id]
+  for y = #mon._t.lines, 1, -1 do
+    local x = mon._t.lines[y]:find(text, 1, true)
+    if x then os.queueEvent("monitor_touch", MONNAME[id], x, y) return end
+  end
+  check(false, "nie znaleziono (od dolu) '" .. text .. "' na " .. id)
+end
+local function touchBelow(mon, monName, anchor, text)
+  local ax, ay = findText(mon, anchor)
+  check(ax ~= nil, "brak '" .. anchor .. "' na " .. monName)
+  if not ax then return end
+  for y = ay, math.min(ay + 5, #mon._t.lines) do
+    local x = mon._t.lines[y]:find(text, 1, true)
+    if x then os.queueEvent("monitor_touch", monName, x + 1, y) return end
+  end
+  check(false, "brak '" .. text .. "' pod '" .. anchor .. "' na " .. monName)
+end
 local function click(text)
   local x, y = findText(computerTerm, text)
   check(x ~= nil, "GUI: nie znaleziono '" .. text .. "'")
@@ -448,7 +541,7 @@ local function click(text)
 end
 
 local actions = {}
-local function at(n, fn) actions[n] = fn end
+local function at(n, fn) actions[n] = actions[n] or {}; table.insert(actions[n], fn) end
 local tick = 0
 local lastTick = 0
 
@@ -502,10 +595,84 @@ local seq = {
   back,
   function() click("Dziennik") end,
   back,
+  function() click("Autocrafting (ME") end,
+  back,
+  function() click("Wyswietlacze Create") end,
+  function() click("create_source_0") end,
+  back, back,
+  function() click("Pilot (Pocket") end,
+  back,
   function() click("Wyjdz do konsoli") end,
 }
 for i, fn in ipairs(seq) do at(8 + i, fn) end
 at(8 + #seq + 5, function() check(false, "GUI nie zakonczylo sie - wymuszam terminate"); os.queueEvent("terminate") end)
+
+-- energia spada -> sredni bilans ujemny i czas do rozladowania
+for t = 2, 12 do at(t, function() matrixE = matrixE - 5e9 end) end
+at(9, function()
+  check(findText(mons.energy, "Do rozladowania") ~= nil, "brak czasu do rozladowania ze sredniego bilansu")
+  check(findText(mons.energy, "Bilans sr.") ~= nil, "brak sredniego bilansu")
+end)
+-- wyszukiwarka: litery z klawiatury, wybor, wydanie 64
+at(3, function() touchLast("mesearch", "P") end)
+at(4, function() touchLast("mesearch", "R") end)
+at(5, function()
+  check(findText(mons.mesearch, "pr") ~= nil, "zapytanie nie wpisane")
+  touchText(MONNAME.mesearch, mons.mesearch, "Przedmiot 40")
+end)
+at(6, function() touchLast("mesearch", "64") end)
+at(7, function() check(exports[1] == "@up minecraft:item_40 x64", "exportItem: " .. tostring(exports[1])) end)
+-- Create: +16 RPM, potem przeciazenie
+at(3, function() touchText(MONNAME.create, mons.create, "+16") end)
+at(5, function() check(rpm == 16, "setTargetSpeed nie zadzialal: " .. rpm); stress = 2000 end)
+at(7, function() check(findText(mons.create, "PRZECIAZ") ~= nil, "brak informacji o przeciazeniu") end)
+-- detektory: x2
+at(3, function() touchText(MONNAME.flow, mons.flow, "x2") end)
+at(5, function() check(limits.energy_detector_0 == 2000 or limits.fluid_detector_0 == 1000, "limit detektora nie zmieniony") end)
+-- promieniowanie
+at(4, function() radiation = 0.01 end)
+at(7, function() check(findText(mons.radiation, "MEDIUM") ~= nil, "promieniowanie: brak poziomu MEDIUM") end)
+-- pilot rednet: status, zly PIN, start reaktora
+at(3, function()
+  os.queueEvent("rednet_message", 7, { cmd = "status", pin = "1234", id = 1 }, "smart_atm10")
+  os.queueEvent("rednet_message", 7, { cmd = "status", pin = "0000", id = 2 }, "smart_atm10")
+end)
+at(5, function()
+  local r1, r2
+  for _, m in ipairs(rednetSent) do
+    if m.msg.id == 1 then r1 = m.msg end
+    if m.msg.id == 2 then r2 = m.msg end
+  end
+  check(r1 and r1.ok and r1.status and #r1.status.reactors == 1, "pilot: brak poprawnego statusu")
+  check(r2 and not r2.ok and r2.err == "Zly PIN", "pilot: zly PIN nie odrzucony")
+end)
+-- zakladka Zrodla na ekranie energii (monitor_big)
+at(10, function() touchText("monitor_big", bigMon, "Zrodla") end)
+at(11, function()
+  for _, t in ipairs({ "Produkcja razem", "fissionReactorLogicAdapter_0", "fusionReactorLogicAdapter_0", "gasBurningGenerator_0",
+                       "powah:energy_cell_0", "powah:reactor_part_0", "turbineValve_0", "Przelaczniki", "Lampy" }) do
+    check(findText(bigMon, t) ~= nil, "Zrodla: brak '" .. t .. "'")
+  end
+  check(findText(bigMon, "crusher_0") == nil, "Zrodla: kruszarka nie jest zrodlem")
+  touchBelow(bigMon, "monitor_big", "gasBurningGenerator_0", "WLACZ")
+  touchBelow(bigMon, "monitor_big", "fissionReactorLogicAdapter_0", "WLACZ")
+end)
+at(12, function()
+  check(genMode == "DISABLED", "generator nie wlaczony (tryb " .. genMode .. ")")
+  check(reactor.active, "reaktor nie wlaczony z zakladki Zrodla")
+  touchBelow(bigMon, "monitor_big", "Przelaczniki", "Lampy")
+  touchBelow(bigMon, "monitor_big", "fissionReactorLogicAdapter_0", "WYLACZ")
+end)
+at(13, function()
+  check(relayOut.top == false, "przelacznik Lampy nie przelaczony z zakladki Zrodla")
+  check(not reactor.active, "reaktor nie wylaczony z zakladki Zrodla")
+  check(findText(bigMon, "25.0kFE/t") ~= nil or findText(bigMon, "10.0kFE/t") ~= nil, "brak produkcji generatora")
+  screensExtra = dump(bigMon, "monitor_big: energia / zakladka Zrodla")
+end)
+-- historia
+at(10, function() check(findText(mons.history, "Brak danych") == nil, "historia: brak danych mimo probek") end)
+-- wyswietlacz Create
+at(4, function() check(sourceTerm._t.lines[1]:find("Energia") ~= nil, "Source Block: brak linii energii: " .. sourceTerm._t.lines[1]) end)
 
 local screens = {}
 scriptHook = function()
@@ -515,13 +682,19 @@ scriptHook = function()
   end
   if tick ~= lastTick then
     lastTick = tick
-    if actions[tick] then actions[tick]() end
+    for _, fn in ipairs(actions[tick] or {}) do fn() end
     if tick == 10 then screens[#screens + 1] = dump(computerTerm, "GUI monitory") end
     if tick == 17 then screens[#screens + 1] = dump(computerTerm, "GUI alarmy") end
+    if tick == 8 then
+      screens[#screens + 1] = dump(mons.mesearch, "monitor: mesearch (po wyborze)")
+      screens[#screens + 1] = dump(mons.history, "monitor: history")
+      screens[#screens + 1] = dump(mons.energy, "monitor: energy (sredni bilans)")
+      screens[#screens + 1] = dump(sourceTerm, "create_source_0")
+    end
     if tick == 3 then
       screens[#screens + 1] = dump(computerTerm, "GUI glowne")
-      for _, id in ipairs(MODS) do screens[#screens + 1] = dump(mons[id], "monitor: " .. id) end
-      screens[#screens + 1] = dump(bigMon, "monitor_big (overview, 0.5)")
+      for _, id in ipairs(MODS) do if id ~= "mesearch" and id ~= "history" then screens[#screens + 1] = dump(mons[id], "monitor: " .. id) end end
+
       screens[#screens + 1] = dump(tiny, "monitor_tiny (fission, 0.5)")
       screens[#screens + 1] = dump(picker, "monitor_new (picker)")
     end
@@ -535,6 +708,7 @@ check(ok, "main.lua zakonczyl sie bledem: " .. tostring(err))
 local out = {}
 out[#out + 1] = dump(computerTerm, "KOMPUTER (po wyjsciu)")
 for _, s in ipairs(screens) do out[#out + 1] = s end
+if screensExtra then out[#out + 1] = screensExtra end
 -- monitory zrzucane przed wyjsciem nie sa dostepne (main czysci je), wiec rysujemy ponownie ponizej
 local fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
 
@@ -547,6 +721,73 @@ check(#chatMsgs > 0, "brak powiadomien na chat")
 local hasScram = false
 for _, c in ipairs(calls) do if c == "scram" then hasScram = true end end
 check(hasScram, "nie wywolano scram()")
+check(crafts[1] == "minecraft:item_3 x64", "autocraft: zle zlecenie: " .. tostring(crafts[1]))
+for _, c in ipairs(crafts) do check(not c:find("item_40"), "autocraft zlecil przedmiot ktorego jest dosc") end
+local hasRad = false
+for _, m in ipairs(chatMsgs) do if m:find("Promieniowanie") then hasRad = true end end
+check(hasRad, "brak alarmu promieniowania na chat")
+check(io.open(TMP .. "/smart/data/history.lua") ~= nil, "historia nie zapisana na dysk")
+check(rednetHost ~= nil, "rednet.host nie wywolany")
+
+---------------------------------------------------------------------------
+-- Faza 2: pilot na Pocket Computerze
+---------------------------------------------------------------------------
+pocket = {}
+local pocketTerm = makeTerm(26, 20)
+current = pocketTerm
+for k in pairs(queue) do queue[k] = nil end
+for k in pairs(timers) do timers[k] = nil end
+readQueue = { "1", "1234" }
+local pocketSent = {}
+local replies = {}
+local fakeStatus = {
+  title = "Baza", time = "12:00", energy = { f = 0.5, stored = 1e9, cap = 2e9 },
+  reactors = { { name = "fissionReactorLogicAdapter_0", label = "Reaktor A", on = false, temp = 400, burn = 5 } },
+  controls = { { label = "Lampy", state = false, mode = "toggle" } },
+  alarms = { { text = "Test alarmu", level = "warn" } },
+}
+rednet.lookup = function(p) assert(p == "smart_atm10") return 5 end
+rednet.send = function(id, msg, proto)
+  assert(id == 5 and proto == "smart_atm10")
+  pocketSent[#pocketSent + 1] = msg
+  replies[#replies + 1] = msg.pin == "1234" and { ok = true, id = msg.id, status = fakeStatus } or { ok = false, id = msg.id, err = "Zly PIN" }
+  return true
+end
+rednet.receive = function(proto, timeout)
+  local r = table.remove(replies, 1)
+  if r then return 5, r, proto end
+  sleep(timeout or 1)
+end
+local steps = {
+  { "Reakt", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "START", function(x, y) pocketShot = dump(pocketTerm, "POCKET: reaktory"); os.queueEvent("mouse_click", 1, x, y) end },
+  { "Przel", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Lampy", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Alarm", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Test alarmu", function() os.queueEvent("key", keys.q) end },
+}
+local si, guard = 1, 0
+scriptHook = function()
+  guard = guard + 1
+  if guard > 2000 then error("pilot: zawieszenie") end
+  local stp = steps[si]
+  if stp and #queue == 0 then
+    local x, y = findText(pocketTerm, stp[1])
+    if x then si = si + 1; stp[2](x + 1, y) end
+  end
+end
+local pok, perr = pcall(parallel.waitForAny, function() dofile(ROOT .. "/smart/pocket.lua") end)
+check(pok, "pocket.lua blad: " .. tostring(perr))
+check(si > #steps, "pilot: nie przeszedl wszystkich krokow (krok " .. si .. ")")
+local cmds = {}
+for _, m in ipairs(pocketSent) do cmds[#cmds + 1] = m.cmd end
+local joined = table.concat(cmds, ",")
+check(joined:find("start") and joined:find("control"), "pilot: nie wyslal komend start/control: " .. joined)
+check(pocketSent[1] and pocketSent[1].pin == "1234", "pilot: zly PIN w zapytaniu")
+check(io.open(TMP .. "/smart/data/pocket.lua") ~= nil, "pilot: konfiguracja nie zapisana")
+out[#out + 1] = pocketShot or dump(pocketTerm, "POCKET")
+fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
+print("Pilot wyslal: " .. joined)
 
 print("Wywolania: " .. table.concat(calls, ", "))
 print("Chat: " .. table.concat(chatMsgs, " | "))

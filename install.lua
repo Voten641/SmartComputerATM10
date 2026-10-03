@@ -104,14 +104,20 @@ local function install(isUpdate)
   end
   local old = localVersion()
   print("Wersja: " .. tostring(old or "-") .. " -> " .. tostring(man.version))
+  -- Pocket Computer dostaje tylko pilota
+  local files = man.files
+  if pocket and type(man.pocket) == "table" then
+    files = man.pocket
+    print("Wykryto Pocket Computer - instaluje pilota")
+  end
 
   -- najpierw pobieramy wszystko do pamieci, zapisujemy dopiero gdy sie udalo
   local data = {}
-  for i, path in ipairs(man.files) do
+  for i, path in ipairs(files) do
     local x, y = term.getCursorPos()
     term.setCursorPos(1, y)
     term.clearLine()
-    write(string.format("[%d/%d] %s", i, #man.files, path))
+    write(string.format("[%d/%d] %s", i, #files, path))
     local body, ferr = httpGet(base .. path)
     if not body then
       print("")
@@ -127,14 +133,14 @@ local function install(isUpdate)
   local oldList = readFile(FILES_LIST)
   if oldList then
     local keep = {}
-    for _, p in ipairs(man.files) do keep[p] = true end
+    for _, p in ipairs(files) do keep[p] = true end
     for p in oldList:gmatch("[^\n]+") do
       if not keep[p] and fs.exists("/" .. p) and not p:find("^smart/data/") then fs.delete("/" .. p) end
     end
   end
 
-  for _, path in ipairs(man.files) do writeFile("/" .. path, data[path]) end
-  writeFile(FILES_LIST, table.concat(man.files, "\n"))
+  for _, path in ipairs(files) do writeFile("/" .. path, data[path]) end
+  writeFile(FILES_LIST, table.concat(files, "\n"))
   writeFile(VERSION_FILE, tostring(man.version))
   if not fs.exists("/smart/data") then fs.makeDir("/smart/data") end
 

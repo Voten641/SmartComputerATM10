@@ -21,6 +21,11 @@ local out = { "-- Wygenerowane przez tools/make_manifest.lua - nie edytuj reczni
   string.format("  version = %q,", version), "  files = {" }
 for _, f in ipairs(files) do out[#out + 1] = string.format("    %q,", f) end
 out[#out + 1] = "  },"
+-- pliki dla Pocket Computera (pilot)
+local pocketFiles = { "install.lua", "update.lua", "startup/smart.lua", "smart/lib/util.lua", "smart/lib/ui.lua", "smart/pocket.lua" }
+out[#out + 1] = "  pocket = {"
+for _, f in ipairs(pocketFiles) do out[#out + 1] = string.format("    %q,", f) end
+out[#out + 1] = "  },"
 if #changes > 0 then
   out[#out + 1] = "  changelog = {"
   for _, c in ipairs(changes) do out[#out + 1] = string.format("    %q,", c) end

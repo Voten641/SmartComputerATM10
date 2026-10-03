@@ -50,16 +50,52 @@ Każdy monitor i każda maszyna pojawią się automatycznie.
 | Moduł | Co pokazuje |
 |---|---|
 | Przegląd bazy | energia, reaktory, magazyny, gracze, alarmy |
-| Energia | Induction Matrix, Energy Cube, Powah, inne magazyny FE – bilans, czas do pełna, wykres |
+| Energia | zakładka **Energia**: magazyny FE, bilans chwilowy i **uśredniony** (okno 30 s–30 min), stabilny czas do pełna/rozładowania, wykres; zakładka **Źródła**: wszystkie źródła energii ze stanem, produkcją i przyciskami (reaktory WŁ/WYŁ/RESET + burn rate, fusion wtrysk, turbina tryb zrzutu, generatory Mekanism WŁ/WYŁ, Powah) oraz przełączniki redstone z tagiem `energia` |
 | Reaktor fission | stan, temperatura, paliwo/chłodziwo/odpady, START/SCRAM, burn rate z monitora |
 | Turbina / Boiler / Reaktor fusion | Mekanism Generators, przełączanie trybu zrzutu, wtrysk fusion |
 | Magazyn ME/RS | AE2/RS przez ME/RS Bridge: zajętość, energia, CPU, przewijana lista przedmiotów z filtrem |
+| Wyszukiwarka ME/RS | klawiatura na monitorze, wyszukiwanie i **wydawanie przedmiotów do skrzyni** (1/16/64/576) |
+| Autocrafting | stan utrzymywanych zapasów (ile jest / ile ma być / craftowanie / brak wzoru) |
+| Create (stres / RPM) | Stressometer, Speedometer, sterowanie Rotation Speed Controller z monitora |
+| Przepływy | Energy / Fluid / Gas Detector – przepływ, limit, zmiana limitu z monitora |
+| Promieniowanie | poziom wg skali Mekanism (LOW…EXTREME), wykres 6h w skali logarytmicznej |
+| Wykresy historii | energia, generacja, ME/RS, stres Create, promieniowanie, temp. reaktora – 1h/6h/24h, zapisane na dysku |
 | Zbiorniki | Dynamic Tank, Create Fluid Tank, inne zbiorniki |
 | Urządzenia (lista) | wszystko co podłączone: Powah, Create Stressometer, detektory, SPS, maszyny… |
 | Gracze | Player Detector – kto online, kto w bazie |
 | Zegar / pogoda | czas gry/rzeczywisty, pogoda, księżyc, biom, promieniowanie |
 | Panel sterowania | duże przyciski przełączników redstone |
 | Alarmy i dziennik | aktywne alarmy + historia zdarzeń |
+
+## Tagi
+
+Urządzeniom i przełącznikom redstone można nadać tagi (*Menu → Urządzenia* / *Panel sterowania*).
+Tag `energia` sprawia, że urządzenie lub przełącznik pojawia się w zakładce **Źródła** na ekranie energii
+(np. przełącznik włączający generatory redstonem albo magazyn, który nie został rozpoznany automatycznie).
+
+Generatory i maszyny Mekanism są włączane/wyłączane przez tryb redstone (WŁ = „ignoruj redstone”,
+WYŁ = „wymaga sygnału”); wymaga to publicznego trybu security maszyny.
+
+## Autocrafting
+
+*Menu → Autocrafting (ME/RS)*: dodajesz przedmioty (wyszukiwanie w magazynie albo po ID), ustawiasz ile ma być
+w magazynie i jaką partią craftować. System co kilka sekund sprawdza stan i zleca crafting, jeśli brakuje
+i nic się już nie craftuje. Wymaga wzorów (patterns) w AE2/RS.
+
+## Wyświetlacze Create
+
+Postaw **Source Block** (CC:C Bridge) przy modemie, połącz go **Display Linkiem** z Flap Display / Nixie Tube /
+innym wyświetlaczem Create. W *Menu → Wyświetlacze Create* wybierasz, co pokazuje każda linia
+(energia, reaktor, generacja, ME, stres, gracze, promieniowanie, alarmy, czas, własny tekst).
+
+## Pilot – Pocket Computer
+
+1. Na komputerze bazy: modem bezprzewodowy (najlepiej **Ender Modem**) + *Menu → Pilot*: włącz i ustaw PIN.
+2. Na Advanced Pocket Computer z Ender Modemem wpisz te same komendy instalacji co na komputerze –
+   instalator sam wykryje Pocket i zainstaluje tylko pilota.
+3. Pilot: stan bazy, START/SCRAM/RESET i burn rate reaktorów, przełączniki redstone, alarmy.
+
+PIN chroni przed przypadkowym sterowaniem, ale wiadomości rednet nie są szyfrowane.
 
 ## Zabezpieczenie reaktora
 

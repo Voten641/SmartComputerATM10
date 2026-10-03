@@ -47,6 +47,7 @@ local TYPE_MAP = {
   -- Create 6
   createstressometer = "stress",
   createspeedometer = "speed",
+  createrotationspeedcontroller = "rsc",
   -- Mekanism (camelCase)
   fissionreactorlogicadapter = "fission",
   fissionreactorport = "fission",
@@ -80,6 +81,7 @@ D.KINDS = {
   scroller = "Scroller Pane",
   stress = "Stressometer",
   speed = "Speedometer",
+  rsc = "Speed Controller",
   fission = "Reaktor Fission",
   turbine = "Turbina",
   boiler = "Boiler",

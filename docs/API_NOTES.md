@@ -90,3 +90,22 @@ Na brak połączenia zwraca `nil, "NOT_CONNECTED"`.
 `create_source` (terminal dla wyświetlaczy Create), `create_target` (`getLine(y)`, `dump()`, `resize(w,h)`, `getSize()`),
 `redrouter` (API jak redstone, strony względem bloku), `scroller` (`getValue`, `setValue`, `setLock`, `isLocked`,
 `getLimit`, `setLimit`; event `scroller_changed`; w docs przykład błędnie `setLocked`), `animatronic`.
+
+## Dodatkowo zweryfikowane (v1.1)
+
+- AP crafting: `craftItem(filter[, cpuName])` – filtr `{name=, count=}`, zwraca obiekt joba lub `nil, "NOT_CRAFTABLE"`;
+  `isCrafting(filter[, cpu])` – filtr generyczny: `{type="item", name=}` (bez `type` rozpoznaje po rejestrze);
+  `getItem({name=})` → stos lub `nil, err` (pusty filtr = `EMPTY_FILTER`).
+- AP `exportItem(target, filter)` – target: nazwa peryferium w sieci CC (`minecraft:chest_0`) albo `@up/@north/...`;
+  zwraca liczbe przeniesionych sztuk lub `nil, "INVENTORY_NOT_FOUND"`. Domyslnie 64 szt. (pole `count`).
+- Create: `Create_RotationSpeedController.setTargetSpeed(int)` – zakres `±maxRotationSpeed` (domyslnie 256), clamp w grze.
+  Eventy: `overstressed(name)`, `stress_change(name, stress, capacity)`, `speed_change(name, speed)`.
+- Detektory AP: `getTransferRate()`, `getTransferRateLimit()`, `setTransferRateLimit(long)`, `getMaxTransferRate()` (long).
+  Typy: `energy_detector` (FE/t), `fluid_detector` (mB/t), `gas_detector` (mB/t).
+- Promieniowanie: `environment_detector.getRadiationRaw()` → Sv/h (tylko z Mekanism). Skala Mekanism:
+  `<1e-5` brak, `<1e-3` LOW, `<0.1` MEDIUM, `<10` ELEVATED, `<100` HIGH, wyzej EXTREME. Tlo = 1e-7.
+- CC:C Bridge `create_source`: pelne `TermMethods` CC:T (write/setCursorPos/clear/clearLine/getSize/...), kolory ignorowane,
+  rozmiar startowy 4x2 do czasu ustawienia przez Display Link, event `monitor_resize`.
+- rednet (CC:T 1.120.2): `open(modem)`, `host(protocol, hostname)`, `lookup(protocol[, hostname[, timeout=2]])`,
+  `send(id, msg, protocol)`, `receive(protocol, timeout)`; event `rednet_message(sender, message, protocol)`.
+  BIOS uruchamia `rednet.run` rownolegle z shellem. Pocket computer: globalne API `pocket`.

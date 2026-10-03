@@ -6,10 +6,15 @@ local C = require("lib.config")
 local D = require("lib.devices")
 local UI = require("lib.ui")
 local A = require("lib.auto")
+local H = require("lib.history")
+local AC = require("lib.autocraft")
+local DS = require("lib.displays")
+local R = require("lib.remote")
 
 local MODULE_IDS = {
   "overview", "energy", "fission", "turbine", "boiler", "fusion",
-  "storage", "tanks", "machines", "players", "clock", "control", "alarms",
+  "storage", "mesearch", "autocraft", "tanks", "create", "flow", "radiation",
+  "history", "machines", "players", "clock", "control", "alarms",
 }
 
 local function readVersion()
@@ -103,6 +108,7 @@ local function rebuild()
   end
   ctx.monitors = mons
   A.applyControls(ctx.cfg)
+  pcall(R.setup, ctx)
   ctx.dirty = false
 end
 
@@ -124,6 +130,10 @@ local function drawPicker(m, c)
   c:header("Wybierz modul: " .. m.name, colors.gray)
   local cols = c.w >= 30 and 2 or 1
   local bw = math.floor((c.w - 1 - cols) / cols)
+  local n = 0
+  for _, id in ipairs(MODULE_IDS) do if ctx.modules[id] then n = n + 1 end end
+  -- odstep miedzy przyciskami tylko gdy jest miejsce
+  local step = (math.ceil(n / cols) * 2 <= c.h - 2) and 2 or 1
   local y, col = 3, 0
   for _, id in ipairs(MODULE_IDS) do
     local mod = ctx.modules[id]
@@ -131,7 +141,7 @@ local function drawPicker(m, c)
       if y > c.h then break end
       c:button("pick", 2 + col * (bw + 1), y, bw, 1, mod.name, colors.white, colors.gray, id)
       col = col + 1
-      if col >= cols then col, y = 0, y + 2 end
+      if col >= cols then col, y = 0, y + step end
     end
   end
 end
@@ -181,6 +191,10 @@ local function tick()
   if ctx.dirty then rebuild() end
   local ok, err = pcall(A.tick, ctx.cfg)
   if not ok then A.logEvent("Blad automatyki: " .. tostring(err), "crit") end
+  ok, err = pcall(AC.tick, ctx)
+  if not ok then A.logEvent("Blad autocraftingu: " .. tostring(err), "warn") end
+  pcall(H.sample, ctx)
+  pcall(DS.tick, ctx)
   for _, m in pairs(ctx.monitors) do
     updateMonitor(m)
     render(m)
@@ -229,9 +243,10 @@ local function main()
   term.clear()
   term.setCursorPos(1, 1)
   print("Smart System " .. ctx.version .. " - start...")
+  pcall(H.load)
   rebuild()
   local gui = require("gui.menu")
-  parallel.waitForAny(tickLoop, eventLoop, function() gui.run(ctx) end)
+  parallel.waitForAny(tickLoop, eventLoop, function() gui.run(ctx) end, function() R.loop(ctx) end)
 end
 
 local ok, err = pcall(main)

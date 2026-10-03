@@ -11,7 +11,23 @@ C.defaults = {
   monitors = {},          -- [nazwaMonitora] = { module, source, scale, accent, title, opts }
   aliases = {},           -- [nazwaPeryferium] = "przyjazna nazwa"
   hidden = {},            -- [nazwaPeryferium] = true
+  tags = {},              -- [nazwaPeryferium] = "energia, ..." (tagi decyduja gdzie urzadzenie sie pokazuje)
   controls = {},          -- przelaczniki redstone: { label, target, side, mode, state, color }
+  displays = {},          -- [create_source] = { lines = { "energy", "reactor", ... }, custom = "" }
+  autocraft = {
+    enabled = false,
+    bridge = "auto",
+    every = 10,           -- co ile sekund sprawdzac stany
+    items = {},           -- { name, label, keep, batch, enabled }
+  },
+  history = {
+    interval = 60,        -- co ile sekund zapisywac probke
+    points = 1440,        -- ile probek trzymac (1440 x 60s = 24h)
+  },
+  remote = {
+    enabled = false,
+    pin = "",
+  },
   alarms = {
     chat = { enabled = false, player = "", prefix = "Smart" },
     speaker = true,
@@ -34,6 +50,8 @@ C.defaults = {
     lowEnergy = { enabled = true, below = 10 },
     storageFull = { enabled = true, above = 95 },
     tankFull = { enabled = false, above = 95 },
+    stress = { enabled = true, above = 90 },          -- % obciazenia sieci Create
+    radiation = { enabled = true, above = 0.00001 },  -- Sv/h (0.00001 = poziom LOW w Mekanism)
   },
 }
 

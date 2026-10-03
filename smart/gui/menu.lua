@@ -11,6 +11,8 @@ local canvas
 local message -- { text, color, untilT }
 
 local SCALES = { 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5 }
+local RAD_VALUES = { 0.00001, 0.001, 0.1, 10 }
+local RAD_LABELS = { [0.00001] = "LOW (10 uSv/h)", [0.001] = "MEDIUM (1 mSv/h)", [0.1] = "ELEVATED (100 mSv/h)", [10] = "HIGH (10 Sv/h)" }
 
 local function changed()
   ctx.save()
@@ -246,8 +248,9 @@ function Screens.monitor(name)
       if mod and mod.options and #mod.options > 0 then
         rows[#rows + 1] = { type = "header", label = "Opcje modulu: " .. mod.name }
         for _, o in ipairs(mod.options) do
-          local extra = { min = o.min, max = o.max, step = o.step }
-          if o.choices then extra.choices = function() return o.choices end end
+          local extra = { min = o.min, max = o.max, step = o.step, labels = o.labels }
+          if o.choices then extra.choices = function() return o.choices end
+          elseif o.choicesFn then extra.choices = o.choicesFn end
           rows[#rows + 1] = cfgRow(o.type, o.label, mcfg.opts, o.key, extra)
           if mcfg.opts[o.key] == nil then mcfg.opts[o.key] = o.default end
         end
@@ -334,6 +337,21 @@ function Screens.device(dev)
         get = function() return ctx.cfg.aliases[dev.name] end,
         set = function(v) ctx.cfg.aliases[dev.name] = (v ~= "" and v or nil); changed() end,
       }
+      local Src = require("lib.sources")
+      rows[#rows + 1] = {
+        type = "toggle", label = "Zrodlo energii (tag energia)",
+        get = function() return Src.hasTag(ctx.cfg.tags[dev.name], Src.TAG) end,
+        set = function(v)
+          local t = Src.setTag(ctx.cfg.tags[dev.name], Src.TAG, v)
+          ctx.cfg.tags[dev.name] = t ~= "" and t or nil
+          changed()
+        end,
+      }
+      rows[#rows + 1] = {
+        type = "text", label = "Tagi (po przecinku)",
+        get = function() return ctx.cfg.tags[dev.name] end,
+        set = function(v) ctx.cfg.tags[dev.name] = (v ~= "" and v:lower() or nil); changed() end,
+      }
       rows[#rows + 1] = {
         type = "toggle", label = "Ukryj (ignoruj)",
         get = function() return ctx.cfg.hidden[dev.name] == true end,
@@ -401,6 +419,10 @@ function Screens.alarms()
         cfgRow("number", "  powyzej (%)", al.storageFull, "above", { min = 0, max = 100, step = 5 }),
         cfgRow("toggle", "Pelny Dynamic Tank", al.tankFull, "enabled"),
         cfgRow("number", "  powyzej (%)", al.tankFull, "above", { min = 0, max = 100, step = 5 }),
+        cfgRow("toggle", "Przeciazenie Create", al.stress, "enabled"),
+        cfgRow("number", "  ostrzezenie od (%)", al.stress, "above", { min = 0, max = 100, step = 5 }),
+        cfgRow("toggle", "Promieniowanie", al.radiation, "enabled"),
+        cfgRow("choice", "  prog", al.radiation, "above", { labels = RAD_LABELS, choices = function() return RAD_VALUES end }),
         { type = "header", label = "Powiadomienia" },
         cfgRow("toggle", "Dzwiek (speaker)", al, "speaker"),
         cfgRow("toggle", "Chat Box", al.chat, "enabled"),
@@ -428,6 +450,12 @@ function Screens.control(i)
         cfgRow("choice", "Tryb", c, "mode", { labels = { toggle = "przelacznik", pulse = "impuls" },
           choices = function() return { "toggle", "pulse" } end }),
         cfgRow("choice", "Kolor (WL)", c, "color", { choices = function() return UI.COLOR_NAMES end }),
+        {
+          type = "toggle", label = "W zrodlach energii (tag)",
+          get = function() return require("lib.sources").hasTag(c.tags, "energia") end,
+          set = function(v) c.tags = require("lib.sources").setTag(c.tags, "energia", v); changed() end,
+        },
+        cfgRow("text", "Tagi (po przecinku)", c, "tags"),
         { type = "header", label = "" },
         { type = "action", label = "Przelacz teraz", bg = colors.green,
           run = function() A.toggleControl(ctx.cfg, i); ctx.save() end },
@@ -517,6 +545,13 @@ function Screens.settings()
         cfgRow("text", "Nazwa bazy", cfg, "title"),
         cfgRow("number", "Odswiezanie (s)", cfg, "refresh", { min = 0.5, max = 10, step = 0.5 }),
         cfgRow("number", "Lista ME/RS co N odswiezen", cfg, "itemsEvery", { min = 1, max = 60, step = 1 }),
+        { type = "header", label = "Historia (wykresy)" },
+        cfgRow("number", "Probka co (s)", cfg.history, "interval", { min = 10, max = 600, step = 10 }),
+        cfgRow("number", "Ilosc probek", cfg.history, "points", { min = 60, max = 4320, step = 60 }),
+        { type = "info", label = "Zakres historii", value = function()
+            return U.fmtTime(cfg.history.interval * cfg.history.points) end },
+        { type = "action", label = "Wyczysc historie", bg = colors.red,
+          run = function() local H = require("lib.history"); H.series = {}; pcall(H.save); flash("Wyczyszczono historie") end },
         { type = "header", label = "Aktualizacje" },
         { type = "info", label = "Wersja", value = ctx.version },
         {
@@ -532,6 +567,194 @@ function Screens.settings()
           end,
         },
         { type = "action", label = "Aktualizuj teraz z GitHub", bg = colors.blue, run = runUpdate },
+      }
+    end,
+  }
+end
+
+---------------------------------------------------------------------------
+-- Autocrafting
+---------------------------------------------------------------------------
+local function acBridge()
+  return require("lib.autocraft").bridge(ctx.cfg)
+end
+
+function Screens.acItem(i)
+  return {
+    title = "Autocraft: przedmiot",
+    rows = function()
+      local it = ctx.cfg.autocraft.items[i]
+      if not it then return {} end
+      local st = require("lib.autocraft").status[it.name] or {}
+      return {
+        { type = "info", label = "ID", value = it.name },
+        { type = "info", label = "Stan", value = (st.count and (U.fmt(st.count) .. " szt., ") or "") .. (st.msg or "-") },
+        cfgRow("text", "Etykieta", it, "label"),
+        cfgRow("number", "Utrzymuj (szt.)", it, "keep", { min = 1, max = 10000000, step = 64 }),
+        cfgRow("number", "Craftuj partiami po", it, "batch", { min = 1, max = 100000, step = 16 }),
+        cfgRow("toggle", "Wlaczony", it, "enabled"),
+        { type = "header", label = "" },
+        { type = "action", label = "Usun z listy", bg = colors.red,
+          run = function() table.remove(ctx.cfg.autocraft.items, i); changed(); pop() end },
+      }
+    end,
+  }
+end
+
+local function addAcItem(name)
+  for _, it in ipairs(ctx.cfg.autocraft.items) do
+    if it.name == name then flash("Juz jest na liscie", colors.orange) return end
+  end
+  table.insert(ctx.cfg.autocraft.items, { name = name, label = "", keep = 64, batch = 64, enabled = true })
+  changed()
+  push(Screens.acItem(#ctx.cfg.autocraft.items))
+end
+
+function Screens.acPick(filter)
+  local list
+  return {
+    title = "Wybierz przedmiot",
+    rows = function()
+      if not list then
+        list = {}
+        local d = acBridge()
+        local items = d and U.call(d.p, "getItems", {}) or {}
+        local f = (filter or ""):lower()
+        for _, it in ipairs(type(items) == "table" and items or {}) do
+          local n = U.itemName(it)
+          if f == "" or n:lower():find(f, 1, true) or (it.name or ""):find(f, 1, true) then
+            list[#list + 1] = { id = it.name, name = n, count = U.itemCount(it), craft = it.isCraftable }
+          end
+        end
+        table.sort(list, function(a, b) return a.count > b.count end)
+      end
+      local rows = {}
+      if #list == 0 then rows[1] = { type = "info", label = "Brak wynikow (lub brak ME/RS Bridge)" } end
+      for k = 1, math.min(#list, 150) do
+        local it = list[k]
+        rows[#rows + 1] = {
+          type = "action", label = it.name, value = U.fmt(it.count) .. (it.craft and " C" or ""),
+          vfg = it.craft and colors.lime or colors.lightGray,
+          run = function() pop(); addAcItem(it.id) end,
+        }
+      end
+      return rows
+    end,
+  }
+end
+
+function Screens.autocraft()
+  local ac = ctx.cfg.autocraft
+  return {
+    title = "Autocrafting",
+    rows = function()
+      local bridges, bLabels = deviceChoices({ "me", "rs" }, true)
+      local status = require("lib.autocraft").status
+      local rows = {
+        cfgRow("toggle", "Wlaczony", ac, "enabled"),
+        cfgRow("choice", "Bridge", ac, "bridge", { labels = bLabels, choices = function() return bridges end }),
+        cfgRow("number", "Sprawdzaj co (s)", ac, "every", { min = 2, max = 600, step = 5 }),
+        { type = "header", label = "Utrzymywane zapasy (C = ma wzor)" },
+      }
+      for i, it in ipairs(ac.items) do
+        local st = status[it.name] or {}
+        rows[#rows + 1] = {
+          type = "action", label = it.label ~= "" and it.label or U.prettyId(it.name),
+          value = (st.count and U.fmt(st.count) or "?") .. "/" .. U.fmt(it.keep),
+          vfg = (st.state == "ok" and colors.lime) or (st.state == "error" and colors.red) or colors.yellow,
+          fg = it.enabled and colors.white or colors.lightGray,
+          run = function() push(Screens.acItem(i)) end,
+        }
+      end
+      rows[#rows + 1] = { type = "action", label = "+ Dodaj z magazynu (szukaj)", bg = colors.green,
+        run = function()
+          local f = prompt("Fragment nazwy (puste = wszystko)", "")
+          push(Screens.acPick(f or ""))
+        end }
+      rows[#rows + 1] = { type = "action", label = "+ Dodaj po ID (np. minecraft:iron_ingot)", bg = colors.green,
+        run = function()
+          local id = prompt("ID przedmiotu", "")
+          if id and id:match("^[%w_%.%-]+:[%w_%./%-]+$") then addAcItem(id)
+          elseif id and id ~= "" then flash("Zly format ID", colors.red) end
+        end }
+      return rows
+    end,
+  }
+end
+
+---------------------------------------------------------------------------
+-- Wyswietlacze Create (CC:C Bridge Source Block)
+---------------------------------------------------------------------------
+function Screens.display(name)
+  local DS = require("lib.displays")
+  return {
+    title = "Wyswietlacz: " .. name,
+    rows = function()
+      local dcfg = DS.config(ctx.cfg, name)
+      local dev = D.get(name)
+      local w, h = 0, 0
+      if dev then w, h = U.call(dev.p, "getSize") end
+      local ids, labels = {}, {}
+      for _, p in ipairs(DS.PROVIDERS) do ids[#ids + 1] = p.id; labels[p.id] = p.label end
+      local rows = {
+        { type = "info", label = "Rozmiar (z Display Link)", value = tostring(w) .. "x" .. tostring(h) },
+        cfgRow("choice", "Wyrownanie", dcfg, "align", { labels = { left = "do lewej", center = "srodek", right = "do prawej" },
+          choices = function() return { "left", "center", "right" } end }),
+        cfgRow("text", "Wlasny tekst", dcfg, "custom"),
+        { type = "header", label = "Linie" },
+      }
+      for i = 1, math.max(4, h or 0) do
+        rows[#rows + 1] = {
+          type = "choice", label = "Linia " .. i, labels = labels,
+          choices = function() return ids end,
+          get = function() return dcfg.lines[i] or "none" end,
+          set = function(v) dcfg.lines[i] = v; changed() end,
+        }
+      end
+      return rows
+    end,
+  }
+end
+
+function Screens.displays()
+  return {
+    title = "Wyswietlacze Create",
+    rows = function()
+      local rows = { { type = "header", label = "Source Block (CC:C Bridge) + Display Link" } }
+      for _, d in ipairs(D.list) do
+        if d.kind == "csource" then
+          rows[#rows + 1] = { type = "action", label = D.label(d), run = function() push(Screens.display(d.name)) end }
+        end
+      end
+      if #rows == 1 then
+        rows[#rows + 1] = { type = "info", label = "Brak Source Block w sieci" }
+        rows[#rows + 1] = { type = "info", label = "Polacz: Source Block -> Display Link -> wyswietlacz" }
+      end
+      return rows
+    end,
+  }
+end
+
+---------------------------------------------------------------------------
+-- Pilot (Pocket Computer)
+---------------------------------------------------------------------------
+function Screens.remote()
+  local rc = ctx.cfg.remote
+  local R = require("lib.remote")
+  return {
+    title = "Pilot (Pocket Computer)",
+    rows = function()
+      local mods = R.wirelessModems()
+      return {
+        cfgRow("toggle", "Wlaczony", rc, "enabled"),
+        cfgRow("text", "PIN", rc, "pin"),
+        { type = "info", label = "Modemy bezprzewodowe", value = #mods > 0 and table.concat(mods, ",") or "BRAK",
+          color = #mods > 0 and colors.lime or colors.red },
+        { type = "info", label = "Nazwa hosta", value = R.hostname or "-" },
+        { type = "header", label = "Na Pocket Computerze (z Ender Modemem):" },
+        { type = "info", label = "wget <link do install.lua> install.lua" },
+        { type = "info", label = "install   (sam wykryje pocket)" },
+        { type = "header", label = "Ender Modem = zasieg bez limitu, miedzy wymiarami" },
       }
     end,
   }
@@ -559,6 +782,9 @@ function Screens.main()
         { type = "action", label = "Urzadzenia - nazwy, ukrywanie", run = function() push(Screens.devices()) end },
         { type = "action", label = "Alarmy i automatyka", run = function() push(Screens.alarms()) end },
         { type = "action", label = "Panel sterowania (redstone)", run = function() push(Screens.controls()) end },
+        { type = "action", label = "Autocrafting (ME/RS)", run = function() push(Screens.autocraft()) end },
+        { type = "action", label = "Wyswietlacze Create", run = function() push(Screens.displays()) end },
+        { type = "action", label = "Pilot (Pocket Computer)", run = function() push(Screens.remote()) end },
         { type = "action", label = "Dziennik zdarzen", run = function() push(Screens.log()) end },
         { type = "action", label = "Ustawienia i aktualizacja", run = function() push(Screens.settings()) end },
         { type = "action", label = "Uruchom ponownie", bg = colors.orange, fg = colors.black, run = function() os.reboot() end },

@@ -59,7 +59,7 @@ function mod.draw(ctx, m, c)
     if st.biome then c:kv(2, y, w, "Biom", U.prettyId(st.biome), colors.lightGray, colors.lime); y = y + 1 end
     if st.dim then c:kv(2, y, w, "Wymiar", U.prettyId(st.dim), colors.lightGray, colors.white); y = y + 1 end
     if type(st.rad) == "number" then
-      c:kv(2, y, w, "Promieniowanie", U.fmt(st.rad, "Sv/h"), colors.lightGray, st.rad > 0.0001 and colors.red or colors.lime)
+      c:kv(2, y, w, "Promieniowanie", U.sv(st.rad), colors.lightGray, st.rad >= 0.00001 and colors.red or colors.lime)
     end
   end
 end

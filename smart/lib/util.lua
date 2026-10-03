@@ -82,6 +82,14 @@ function U.fmtTime(s)
   return s .. "s"
 end
 
+-- dawka promieniowania (Sv/h) w czytelnych jednostkach
+function U.sv(r)
+  if type(r) ~= "number" then return "?" end
+  if r < 0.001 then return string.format("%.1f uSv/h", r * 1000000) end
+  if r < 1 then return string.format("%.1f mSv/h", r * 1000) end
+  return string.format("%.2f Sv/h", r)
+end
+
 function U.temp(k)
   if type(k) ~= "number" then return "?K" end
   return string.format("%.0fK", k)

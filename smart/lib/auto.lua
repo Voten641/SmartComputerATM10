@@ -149,6 +149,48 @@ local function checkTanks(cfg, cur)
   end
 end
 
+-- poziomy promieniowania wg Mekanism (RadiationScale, Sv/h)
+A.RAD_LEVELS = {
+  { v = 0.00001, name = "LOW" },
+  { v = 0.001, name = "MEDIUM" },
+  { v = 0.1, name = "ELEVATED" },
+  { v = 10, name = "HIGH" },
+  { v = 100, name = "EXTREME" },
+}
+
+function A.radLevel(r)
+  local name = "brak"
+  for _, l in ipairs(A.RAD_LEVELS) do if r >= l.v then name = l.name end end
+  return name
+end
+
+local function checkStress(cfg, cur)
+  local sc = cfg.alarms.stress
+  if not sc.enabled then return end
+  for _, d in ipairs(D.byKind("stress")) do
+    local s, c = U.call(d.p, "getStress"), U.call(d.p, "getStressCapacity")
+    if type(s) == "number" and type(c) == "number" then
+      if c > 0 and s > c then
+        raise(cur, cfg, "stress:" .. d.name, "crit", D.label(d) .. ": PRZECIAZENIE Create")
+      elseif c > 0 and s / c * 100 > sc.above then
+        raise(cur, cfg, "stress:" .. d.name, "warn", D.label(d) .. ": obciazenie " .. U.pct(s / c))
+      end
+    end
+  end
+end
+
+local function checkRadiation(cfg, cur)
+  local rc = cfg.alarms.radiation
+  if not rc.enabled then return end
+  for _, d in ipairs(D.byKind("env")) do
+    local r = U.call(d.p, "getRadiationRaw")
+    if type(r) == "number" and r >= rc.above then
+      raise(cur, cfg, "rad:" .. d.name, r >= 0.1 and "crit" or "warn",
+        "Promieniowanie " .. U.sv(r) .. " (" .. A.radLevel(r) .. ") - " .. D.label(d))
+    end
+  end
+end
+
 local function flushChat(cfg)
   if #A.chatQueue == 0 then return end
   local boxes = D.byKind("chat")
@@ -188,6 +230,8 @@ function A.tick(cfg)
   end
   checkStorage(cfg, cur)
   checkTanks(cfg, cur)
+  checkStress(cfg, cur)
+  checkRadiation(cfg, cur)
 
   for id, a in pairs(A.active) do
     if not cur[id] then logEvent("OK: " .. a.text, "ok") end
