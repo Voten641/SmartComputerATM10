@@ -1,0 +1,33 @@
+-- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
+return {
+  version = "1.0.0",
+  files = {
+    "install.lua",
+    "update.lua",
+    "smart/gui/menu.lua",
+    "smart/lib/auto.lua",
+    "smart/lib/config.lua",
+    "smart/lib/devices.lua",
+    "smart/lib/mod.lua",
+    "smart/lib/ui.lua",
+    "smart/lib/util.lua",
+    "smart/main.lua",
+    "smart/modules/alarms.lua",
+    "smart/modules/boiler.lua",
+    "smart/modules/clock.lua",
+    "smart/modules/control.lua",
+    "smart/modules/energy.lua",
+    "smart/modules/fission.lua",
+    "smart/modules/fusion.lua",
+    "smart/modules/machines.lua",
+    "smart/modules/overview.lua",
+    "smart/modules/players.lua",
+    "smart/modules/storage.lua",
+    "smart/modules/tanks.lua",
+    "smart/modules/turbine.lua",
+    "startup/smart.lua",
+  },
+  changelog = {
+    "Pierwsza wersja",
+  },
+}
