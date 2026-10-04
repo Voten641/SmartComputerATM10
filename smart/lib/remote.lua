@@ -1,6 +1,7 @@
 -- Smart System: serwer pilota (Pocket Computer przez rednet, najlepiej Ender Modem)
 local U = require("lib.util")
 local D = require("lib.devices")
+local UI = require("lib.ui")
 
 local R = {}
 R.PROTOCOL = "smart_atm10"
@@ -68,13 +69,69 @@ function R.status(ctx)
   return st
 end
 
-function R.handle(ctx, msg)
+---------------------------------------------------------------------------
+-- Pelne menu na pilocie: dla kazdego pocketa trzymamy wlasna instancje menu rysowana
+-- do niewidocznego okna; pilot dostaje gotowe linie (tekst + kolory blit) i odsyla klikniecia.
+---------------------------------------------------------------------------
+R.sessions = {}
+local SESSION_TIMEOUT = 600
+
+local function menuSession(ctx, id, w, h)
+  w = U.clamp(math.floor(tonumber(w) or 26), 10, 100)
+  h = U.clamp(math.floor(tonumber(h) or 19), 6, 50)
+  local s = R.sessions[id]
+  if not s then
+    local win = window.create(term.native(), 1, 1, w, h, false)
+    s = { menu = require("gui.menu").new(ctx, {}), win = win, canvas = UI.canvas(win), w = w, h = h }
+    R.sessions[id] = s
+  elseif s.w ~= w or s.h ~= h then
+    s.win.reposition(1, 1, w, h)
+    s.w, s.h = w, h
+  end
+  s.last = os.clock()
+  -- sprzatanie porzuconych sesji
+  for sid, other in pairs(R.sessions) do
+    if os.clock() - (other.last or 0) > SESSION_TIMEOUT then R.sessions[sid] = nil end
+  end
+  return s
+end
+
+local function menuFrame(s)
+  s.menu.draw(s.canvas)
+  local lines = {}
+  for y = 1, s.h do
+    local t, f, b = s.win.getLine(y)
+    lines[y] = { t, f, b }
+  end
+  return lines
+end
+
+function R.menu(ctx, sender, msg)
+  local s = menuSession(ctx, sender, msg.w, msg.h)
+  local a = msg.action
+  if a ~= "frame" then
+    -- akcje ida na ostatnio wyslana klatke (przyciski sa zarejestrowane w s.canvas)
+    if s.drawn == nil then menuFrame(s) end
+    if a == "click" then s.menu.click(tonumber(msg.x) or 0, tonumber(msg.y) or 0)
+    elseif a == "scroll" then s.menu.scroll(tonumber(msg.dir) or 0)
+    elseif a == "char" and type(msg.ch) == "string" then
+      for ch in msg.ch:gmatch(".") do s.menu.char(ch) end
+    elseif a == "key" then s.menu.key(tonumber(msg.key) or 0) end
+  end
+  local lines = menuFrame(s)
+  s.drawn = true
+  return { ok = true, lines = lines, input = s.menu.isInput() }
+end
+
+function R.handle(ctx, msg, sender)
   if type(msg) ~= "table" then return nil end
   local rc = ctx.cfg.remote
   if not rc.enabled then return { ok = false, err = "Pilot wylaczony" } end
   if rc.pin == "" or tostring(msg.pin) ~= rc.pin then return { ok = false, err = "Zly PIN" } end
   local cmd = msg.cmd
-  if cmd == "status" then
+  if cmd == "menu" then
+    return R.menu(ctx, sender, msg)
+  elseif cmd == "status" then
     return { ok = true, status = R.status(ctx) }
   elseif cmd == "start" or cmd == "scram" or cmd == "reset" or cmd == "burn" then
     local d = findReactor(msg.name)
@@ -109,7 +166,7 @@ function R.loop(ctx)
   while true do
     local _, sender, msg, protocol = os.pullEvent("rednet_message")
     if protocol == R.PROTOCOL and ctx.cfg.remote.enabled then
-      local ok, reply = pcall(R.handle, ctx, msg)
+      local ok, reply = pcall(R.handle, ctx, msg, sender)
       if not ok then reply = { ok = false, err = tostring(reply) } end
       if reply then
         reply.id = type(msg) == "table" and msg.id or nil

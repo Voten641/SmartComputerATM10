@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.1.1",
+  version = "1.1.2",
   files = {
     "install.lua",
     "update.lua",
@@ -29,6 +29,7 @@ return {
     "smart/modules/fusion.lua",
     "smart/modules/history.lua",
     "smart/modules/machines.lua",
+    "smart/modules/menu.lua",
     "smart/modules/mesearch.lua",
     "smart/modules/overview.lua",
     "smart/modules/players.lua",
@@ -48,9 +49,8 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Naprawa: Reactor Port nie byl reaktorem (wymagany Logic Adapter) - koniec 'nieuformowany'",
-    "Automatyczny ponowny skan gdy multiblok uformuje sie po starcie",
-    "Laczenie przelacznika redstone z urzadzeniem (jeden blok na zakladce Zrodla, sterowanie razem)",
-    "Dzwiek i pasek potwierdzenia po kliknieciu na monitorze",
+    "Pelne menu konfiguracji na Pocket Computerze (zakladka Menu w pilocie)",
+    "Pelne menu konfiguracji na monitorze dotykowym (modul Menu konfiguracji, klawiatura ekranowa, blokada PIN)",
+    "Wpisywanie tekstu w menu bez blokowania systemu",
   },
 }

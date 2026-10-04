@@ -61,7 +61,7 @@ local function setup()
 end
 
 local reqId = 0
-local function request(msg)
+local function doRequest(msg)
   reqId = reqId + 1
   msg.id, msg.pin = reqId, cfg.pin
   rednet.send(cfg.server, msg, PROTO)
@@ -74,12 +74,36 @@ local function request(msg)
 end
 
 ---------------------------------------------------------------------------
-local TABS = { { id = "stan", label = "Stan" }, { id = "reakt", label = "Reakt" }, { id = "przel", label = "Przel" }, { id = "alarm", label = "Alarm" } }
+local TABS = {
+  { id = "stan", label = "Stan" }, { id = "reakt", label = "Reak" }, { id = "przel", label = "Prze" },
+  { id = "alarm", label = "Alar" }, { id = "menu", label = "Menu" },
+}
 local tab = "stan"
 local status, lastErr, lastOk = nil, nil, 0
 local scroll = 0
+local menuLines = nil -- ostatnia klatka pelnego menu z bazy
+
+-- zakladka Menu: pelne menu komputera bazy rysowane zdalnie (ostatni wiersz = pasek pilota)
+local function drawMenu()
+  c:reset()
+  if menuLines then
+    for y, l in ipairs(menuLines) do
+      if y < c.h and #l[1] == #l[2] and #l[1] == #l[3] then
+        term.setCursorPos(1, y)
+        term.blit(l[1], l[2], l[3])
+      end
+    end
+  else
+    c:clear(colors.black)
+    c:center(math.floor(c.h / 2), lastErr or "Laczenie z menu bazy...", colors.orange, colors.black)
+  end
+  c:rect(1, c.h, c.w, 1, colors.gray)
+  c:button("leave", 1, c.h, 9, 1, "<< Pilot", colors.black, colors.lightBlue)
+  if lastErr then c:text(11, c.h, U.trunc("! " .. lastErr, c.w - 11), colors.red, colors.gray) end
+end
 
 local function draw()
+  if tab == "menu" then return drawMenu() end
   c:reset()
   c:clear(colors.black)
   local alarms = status and #status.alarms or 0
@@ -160,6 +184,8 @@ local function draw()
   c:button("setup", c.w - 4, c.h, 5, 1, "Baza", colors.black, colors.lightGray)
 end
 
+local request -- zdefiniowane nizej (forward)
+
 local function apply(reply)
   if reply.ok then
     status, lastErr, lastOk = reply.status or status, nil, os.clock()
@@ -170,6 +196,20 @@ local function apply(reply)
       sleep(1)
       cfg.pin = nil
     end
+  end
+end
+
+request = doRequest
+
+local function menuRequest(action, extra)
+  local msg = { cmd = "menu", action = action, w = c.w, h = c.h - 1 }
+  for k, v in pairs(extra or {}) do msg[k] = v end
+  local reply = request(msg)
+  if reply.ok and reply.lines then
+    menuLines, lastErr, lastOk = reply.lines, nil, os.clock()
+  else
+    lastErr = reply.err or "Blad"
+    if reply.err == "Zly PIN" then cfg.pin = nil end
   end
 end
 
@@ -187,13 +227,29 @@ while true do
     apply(request({ cmd = "status" }))
   end
   local e, a, b, y = os.pullEvent()
-  if e == "timer" and a == timer then
-    apply(request({ cmd = "status" }))
+  if tab == "menu" and e ~= "timer" then
+    if e == "mouse_click" then
+      if y < c.h then
+        menuRequest("click", { x = b, y = y })
+      else
+        local btn = c:hit(b, y)
+        if btn and btn.id == "leave" then tab = "stan"; apply(request({ cmd = "status" })) end
+      end
+    elseif e == "mouse_scroll" then menuRequest("scroll", { dir = a })
+    elseif e == "char" or e == "paste" then menuRequest("char", { ch = a })
+    elseif e == "key" then menuRequest("key", { key = a }) end
+    if e == "mouse_click" or e == "mouse_scroll" or e == "char" or e == "paste" or e == "key" then
+      timer = os.startTimer(2)
+    end
+  elseif e == "timer" and a == timer then
+    if tab == "menu" then menuRequest("frame") else apply(request({ cmd = "status" })) end
     timer = os.startTimer(2)
   elseif e == "mouse_click" then
     local btn = c:hit(b, y)
     if btn then
-      if btn.id == "tab" then tab, scroll = btn.data, 0
+      if btn.id == "tab" then
+        tab, scroll = btn.data, 0
+        if tab == "menu" then menuRequest("frame") end
       elseif btn.id == "cmd" then
         apply(request({ cmd = btn.data[1], name = btn.data[2], delta = btn.data[3] }))
       elseif btn.id == "ctl" then

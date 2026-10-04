@@ -12,7 +12,7 @@ local DS = require("lib.displays")
 local R = require("lib.remote")
 
 local MODULE_IDS = {
-  "overview", "energy", "fission", "turbine", "boiler", "fusion",
+  "overview", "menu", "energy", "fission", "turbine", "boiler", "fusion",
   "storage", "mesearch", "autocraft", "tanks", "create", "flow", "radiation",
   "history", "machines", "players", "clock", "control", "alarms",
 }

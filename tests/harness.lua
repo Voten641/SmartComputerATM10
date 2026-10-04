@@ -27,7 +27,7 @@ colors = {}
 local CN = { "white", "orange", "magenta", "lightBlue", "yellow", "lime", "pink", "gray", "lightGray", "cyan", "purple", "blue", "brown", "green", "red", "black" }
 for i, n in ipairs(CN) do colors[n] = 2 ^ (i - 1) end
 colours = colors
-keys = { q = 16, backspace = 14, up = 200, down = 208, pageUp = 201, pageDown = 209, enter = 28 }
+keys = { q = 16, backspace = 14, up = 200, down = 208, pageUp = 201, pageDown = 209, enter = 28, numPadEnter = 335 }
 
 ---------------------------------------------------------------------------
 -- terminal z buforem
@@ -120,9 +120,18 @@ function window.create(parent, x, y, w, h, visible)
   function win.write(s) origWrite(s); if vis then flush() end end
   function win.setVisible(v) vis = v; if v then flush() end end
   function win.isVisible() return vis end
-  function win.reposition() end
+  function win.reposition(nx, ny, nw, nh)
+    if nw and nh then
+      w, h = nw, nh
+      win._t.w, win._t.h = nw, nh
+      win.clear()
+    end
+  end
   function win.getPosition() return x, y end
-  function win.getLine(yy) return win._t.lines[yy] end
+  function win.getLine(yy)
+    local t = win._t.lines[yy]
+    return t, string.rep("0", #t), string.rep("f", #t)
+  end
   return win
 end
 
@@ -458,6 +467,7 @@ for i, id in ipairs(MODS) do MONNAME[id] = "monitor_" .. i end
 local mons = {}
 for i, id in ipairs(MODS) do mons[id] = monitor("monitor_" .. i, i % 2 == 0 and 39 or 29, i % 3 == 0 and 26 or 19) end
 local bigMon = monitor("monitor_big", 79, 38)
+local menuMon = monitor("monitor_menu", 51, 26)
 local tiny = monitor("monitor_tiny", 15, 10)
 local picker = monitor("monitor_new", 29, 19)
 
@@ -510,6 +520,7 @@ cfg.autocraft = { enabled = true, bridge = "auto", every = 1, items = {
   { name = "minecraft:nopattern", label = "", keep = 5, batch = 64, enabled = true },
 } }
 cfg.remote = { enabled = true, pin = "1234" }
+cfg.monitors.monitor_menu = { module = "menu", scale = 1, accent = "cyan", opts = { lock = true, lockAfter = 120 } }
 cfg.history = { interval = 1, points = 100 }
 cfg.monitors.monitor_tiny = { module = "fission", scale = 0.5, accent = "red", opts = {} }
 local f = io.open(TMP .. "/smart/data/config.lua", "w"); f:write(textutils.serialize(cfg)); f:close()
@@ -542,6 +553,24 @@ local function touchBelow(mon, monName, anchor, text)
     if x then os.queueEvent("monitor_touch", monName, x + 1, y) return end
   end
   check(false, "brak '" .. text .. "' pod '" .. anchor .. "' na " .. monName)
+end
+local function typeText(str)
+  for ch in str:gmatch(".") do os.queueEvent("char", ch) end
+  os.queueEvent("key", keys.enter)
+end
+-- klawisz klawiatury ekranowej: szukamy wiersza klawiatury i litery w nim
+local function touchKey(mon, monName, ch)
+  local rowsPat = { "1%s+2%s+3", "q%s+w%s+e", "a%s+s%s+d", "z%s+x%s+c" }
+  for y = #mon._t.lines, 1, -1 do
+    local line = mon._t.lines[y]
+    for _, pat in ipairs(rowsPat) do
+      if line:find(pat) then
+        local x = line:find(ch, 1, true)
+        if x then os.queueEvent("monitor_touch", monName, x, y) return end
+      end
+    end
+  end
+  check(false, "klawiatura ekranowa: brak klawisza '" .. ch .. "'")
 end
 local function click(text)
   local x, y = findText(computerTerm, text)
@@ -597,10 +626,14 @@ local seq = {
   back,
   function() click("Panel sterowania (") end,
   function() click("+ Dodaj") end,
-  function() readQueue[1] = "Pompa"; click("Nazwa") end,
+  function() click("Nazwa") end,
+  function() click("Wyczysc") end,
+  function() typeText("Pompa") end,
   back, back,
   function() click("Ustawienia i") end,
-  function() readQueue[1] = "2"; click("Odswiezanie") end,
+  function() click("Odswiezanie") end,
+  function() click("Wyczysc") end,
+  function() typeText("2") end,
   back,
   function() click("Dziennik") end,
   back,
@@ -654,6 +687,68 @@ at(5, function()
   end
   check(r1 and r1.ok and r1.status and #r1.status.reactors == 1, "pilot: brak poprawnego statusu")
   check(r2 and not r2.ok and r2.err == "Zly PIN", "pilot: zly PIN nie odrzucony")
+end)
+-- menu na monitorze: blokada PIN, nawigacja, klawiatura ekranowa
+at(2, function()
+  check(findText(menuMon, "Wpisz PIN") ~= nil, "menu monitora: brak blokady PIN")
+  for _, k in ipairs({ "1", "2", "3", "4", "OK" }) do touchText("monitor_menu", menuMon, k) end
+end)
+at(3, function()
+  check(findText(menuMon, "Monitory  - co gdzie") ~= nil, "menu monitora: nie odblokowano / brak menu")
+  touchText("monitor_menu", menuMon, "Ustawienia i")
+end)
+at(4, function() touchText("monitor_menu", menuMon, "Nazwa bazy") end)
+at(5, function()
+  check(findText(menuMon, "spacja") ~= nil, "menu monitora: brak klawiatury ekranowej")
+  for y, line in ipairs(menuMon._t.lines) do
+    local a, b = line:find("OK%s+")
+    if a and line:sub(b + 1, b + 7) == "Wyczysc" then os.queueEvent("monitor_touch", "monitor_menu", b + 2, y) end
+  end
+end)
+at(6, function()
+  oskShot = dump(menuMon, "monitor_menu: wpisywanie (klawiatura ekranowa)")
+  for _, ch in ipairs({ "b", "a", "z", "a" }) do touchKey(menuMon, "monitor_menu", ch) end
+end)
+at(7, function()
+  check(findText(menuMon, "baza_") ~= nil, "menu monitora: tekst nie wpisany z klawiatury ekranowej")
+  for y, line in ipairs(menuMon._t.lines) do
+    local x = line:find("OK%s+Wyczysc")
+    if x then os.queueEvent("monitor_touch", "monitor_menu", x, y) end
+  end
+end)
+at(8, function()
+  menuShot = dump(menuMon, "monitor_menu (menu na monitorze)")
+  touchText("monitor_menu", menuMon, "<")
+end)
+-- menu zdalne (serwer): klatka, klikniecie w wiersz
+at(3, function()
+  os.queueEvent("rednet_message", 8, { cmd = "menu", action = "frame", w = 26, h = 19, pin = "1234", id = 11 }, "smart_atm10")
+  os.queueEvent("rednet_message", 8, { cmd = "menu", action = "frame", w = 26, h = 19, pin = "9999", id = 13 }, "smart_atm10")
+end)
+local function reply(id) for _, m in ipairs(rednetSent) do if m.msg.id == id then return m.msg end end end
+at(4, function()
+  local r = reply(11)
+  check(r and r.ok and r.lines and #r.lines == 19, "menu zdalne: brak klatki 26x19")
+  if r and r.lines then
+    local t = { "+--------------------------+ klatka menu dla pilota (26x19)" }
+    for _, l in ipairs(r.lines) do t[#t + 1] = "|" .. l[1] .. "|" end
+    remoteShot = table.concat(t, "\n")
+  end
+  local rb = reply(13)
+  check(rb and not rb.ok and rb.err == "Zly PIN", "menu zdalne: zly PIN nie odrzucony")
+  if r and r.lines then
+    check(#r.lines[1][1] == 26 and #r.lines[1][2] == 26 and #r.lines[1][3] == 26, "menu zdalne: zla szerokosc linii blit")
+    for y, l in ipairs(r.lines) do
+      if l[1]:find("Monitory  -", 1, true) then
+        os.queueEvent("rednet_message", 8, { cmd = "menu", action = "click", x = 5, y = y, w = 26, h = 19, pin = "1234", id = 12 }, "smart_atm10")
+        break
+      end
+    end
+  end
+end)
+at(5, function()
+  local r = reply(12)
+  check(r and r.ok and r.lines and r.lines[1][1]:find("Monitory"), "menu zdalne: klikniecie nie otworzylo ekranu Monitory")
 end)
 -- zakladka Zrodla na ekranie energii (monitor_big)
 at(10, function() touchText("monitor_big", bigMon, "Zrodla") end)
@@ -735,6 +830,9 @@ local out = {}
 out[#out + 1] = dump(computerTerm, "KOMPUTER (po wyjsciu)")
 for _, s in ipairs(screens) do out[#out + 1] = s end
 if screensExtra then out[#out + 1] = screensExtra end
+if oskShot then out[#out + 1] = oskShot end
+if menuShot then out[#out + 1] = menuShot end
+if remoteShot then out[#out + 1] = remoteShot end
 -- monitory zrzucane przed wyjsciem nie sa dostepne (main czysci je), wiec rysujemy ponownie ponizej
 local fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
 
@@ -742,6 +840,7 @@ local fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n
 local saved = textutils.unserialize(io.open(TMP .. "/smart/data/config.lua"):read("a"))
 check(saved and saved.monitors.monitor_new and saved.monitors.monitor_new.module == "energy", "wybor modulu z monitora nie zapisany")
 check(saved and saved.refresh == 2, "zmiana odswiezania z GUI nie zapisana")
+check(saved and saved.title == "baza", "menu monitora: nazwa bazy nie zapisana (" .. tostring(saved and saved.title) .. ")")
 local foundPompa = false
 for _, c in ipairs(saved and saved.controls or {}) do if c.label == "Pompa" then foundPompa = true end end
 check(foundPompa, "nowy przelacznik nie zapisany")
@@ -768,6 +867,7 @@ for k in pairs(timers) do timers[k] = nil end
 readQueue = { "1", "1234" }
 local pocketSent = {}
 local replies = {}
+menuActions = {}
 local fakeStatus = {
   title = "Baza", time = "12:00", energy = { f = 0.5, stored = 1e9, cap = 2e9 },
   reactors = { { name = "fissionReactorLogicAdapter_0", label = "Reaktor A", on = false, temp = 400, burn = 5 } },
@@ -778,6 +878,17 @@ rednet.lookup = function(p) assert(p == "smart_atm10") return 5 end
 rednet.send = function(id, msg, proto)
   assert(id == 5 and proto == "smart_atm10")
   pocketSent[#pocketSent + 1] = msg
+  if msg.cmd == "menu" then
+    menuActions[#menuActions + 1] = msg
+    local lines = {}
+    for y = 1, msg.h do
+      local t = y == 1 and "MENU BAZY" or ""
+      t = (t .. string.rep(" ", msg.w)):sub(1, msg.w)
+      lines[y] = { t, string.rep("0", msg.w), string.rep("f", msg.w) }
+    end
+    replies[#replies + 1] = { ok = true, id = msg.id, lines = lines }
+    return true
+  end
   replies[#replies + 1] = msg.pin == "1234" and { ok = true, id = msg.id, status = fakeStatus } or { ok = false, id = msg.id, err = "Zly PIN" }
   return true
 end
@@ -787,12 +898,17 @@ rednet.receive = function(proto, timeout)
   sleep(timeout or 1)
 end
 local steps = {
-  { "Reakt", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Reak", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
   { "START", function(x, y) pocketShot = dump(pocketTerm, "POCKET: reaktory"); os.queueEvent("mouse_click", 1, x, y) end },
-  { "Przel", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Prze", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
   { "Lampy", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
-  { "Alarm", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
-  { "Test alarmu", function() os.queueEvent("key", keys.q) end },
+  { "Alar", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "Test alarmu", function() end },
+  { "Menu", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
+  { "MENU BAZY", function() os.queueEvent("mouse_click", 1, 3, 5) end },
+  { "MENU BAZY", function() os.queueEvent("char", "x") end },
+  { "<< Pilot", function(x, y) pocketMenuShot = dump(pocketTerm, "POCKET: menu bazy"); os.queueEvent("mouse_click", 1, x, y) end },
+  { "Reaktory", function() os.queueEvent("key", keys.q) end },
 }
 local si, guard = 1, 0
 scriptHook = function()
@@ -813,6 +929,12 @@ local joined = table.concat(cmds, ",")
 check(joined:find("start") and joined:find("control"), "pilot: nie wyslal komend start/control: " .. joined)
 check(pocketSent[1] and pocketSent[1].pin == "1234", "pilot: zly PIN w zapytaniu")
 check(io.open(TMP .. "/smart/data/pocket.lua") ~= nil, "pilot: konfiguracja nie zapisana")
+local acts = {}
+for _, m in ipairs(menuActions) do acts[#acts + 1] = m.action .. (m.action == "click" and ("@" .. m.x .. "," .. m.y) or "") .. (m.ch and (":" .. m.ch) or "") end
+local actStr = table.concat(acts, " ")
+check(actStr:find("frame") and actStr:find("click@3,5") and actStr:find("char:x"), "pilot menu: brak akcji (" .. actStr .. ")")
+check(menuActions[1] and menuActions[1].h == 19 and menuActions[1].w == 26, "pilot menu: zly rozmiar zadania")
+print("Pilot menu: " .. actStr)
 out[#out + 1] = pocketShot or dump(pocketTerm, "POCKET")
 fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
 print("Pilot wyslal: " .. joined)

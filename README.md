@@ -44,12 +44,16 @@ Każdy monitor i każda maszyna pojawią się automatycznie.
     powiadomienia (Chat Box, speaker, sygnał redstone).
   * *Panel sterowania* – przełączniki redstone (strony komputera, Redstone Relay, RedRouter z CC:C Bridge).
 * **Na monitorze** – nowy, nieprzypisany monitor pokazuje listę modułów: dotknij jednego, żeby go przypisać.
+  Moduł **Menu konfiguracji** daje na monitorze dotykowym *dokładnie to samo menu* co na komputerze
+  (z klawiaturą ekranową do wpisywania i opcjonalną blokadą PIN-em).
+* **Na Pocket Computerze** – zakładka **Menu** w pilocie pokazuje pełne menu komputera bazy.
 
 ## Moduły ekranów
 
 | Moduł | Co pokazuje |
 |---|---|
 | Przegląd bazy | energia, reaktory, magazyny, gracze, alarmy |
+| Menu konfiguracji | pełne menu ustawień sterowane dotykiem; klawiatura ekranowa; blokada PIN-em pilota po bezczynności |
 | Energia | zakładka **Energia**: magazyny FE, bilans chwilowy i **uśredniony** (okno 30 s–30 min), stabilny czas do pełna/rozładowania, wykres; zakładka **Źródła**: wszystkie źródła energii ze stanem, produkcją i przyciskami (reaktory WŁ/WYŁ/RESET + burn rate, fusion wtrysk, turbina tryb zrzutu, generatory Mekanism WŁ/WYŁ, Powah) oraz przełączniki redstone z tagiem `energia` |
 | Reaktor fission | stan, temperatura, paliwo/chłodziwo/odpady, START/SCRAM, burn rate z monitora |
 | Turbina / Boiler / Reaktor fusion | Mekanism Generators, przełączanie trybu zrzutu, wtrysk fusion |
@@ -107,8 +111,12 @@ innym wyświetlaczem Create. W *Menu → Wyświetlacze Create* wybierasz, co pok
 2. Na Advanced Pocket Computer z Ender Modemem wpisz te same komendy instalacji co na komputerze –
    instalator sam wykryje Pocket i zainstaluje tylko pilota.
 3. Pilot: stan bazy, START/SCRAM/RESET i burn rate reaktorów, przełączniki redstone, alarmy.
+4. Zakładka **Menu**: pełne menu komputera bazy – wszystko co na komputerze (monitory, urządzenia, alarmy,
+   autocrafting, wyświetlacze, ustawienia, aktualizacja). Klikasz jak na komputerze, wpisujesz z klawiatury
+   pocketa, **<< Pilot** wraca do zakładek. Każdy pocket ma własną sesję menu.
 
 PIN chroni przed przypadkowym sterowaniem, ale wiadomości rednet nie są szyfrowane.
+Ten sam PIN (najlepiej same cyfry) odblokowuje menu na monitorach z włączoną blokadą.
 
 ## Reaktor: podłącz Logic Adapter, nie Reactor Port
 
