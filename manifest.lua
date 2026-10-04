@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.1.2",
+  version = "1.1.3",
   files = {
     "install.lua",
     "update.lua",
@@ -49,8 +49,9 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Pelne menu konfiguracji na Pocket Computerze (zakladka Menu w pilocie)",
-    "Pelne menu konfiguracji na monitorze dotykowym (modul Menu konfiguracji, klawiatura ekranowa, blokada PIN)",
-    "Wpisywanie tekstu w menu bez blokowania systemu",
+    "Duzy terminal komputera (config CC term_sizes): menu po lewej + panele z modulami na zywo",
+    "Ustawienia > Ekran komputera: uklad, kolumny, szerokosc menu, panele",
+    "Pilot: klatka menu max 80x40 wysrodkowana na duzym ekranie (mniej danych po rednecie)",
+    "Poprawka README",
   },
 }

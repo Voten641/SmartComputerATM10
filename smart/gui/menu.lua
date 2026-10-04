@@ -597,6 +597,7 @@ function G.new(ctx, opts)
           cfgRow("number", "Odswiezanie (s)", cfg, "refresh", { min = 0.5, max = 10, step = 0.5 }),
           cfgRow("number", "Lista ME/RS co N odswiezen", cfg, "itemsEvery", { min = 1, max = 60, step = 1 }),
           cfgRow("toggle", "Dzwiek klikniecia (glosnik)", cfg, "clickSound"),
+          { type = "action", label = "Ekran komputera (duzy terminal)", run = function() push(Screens.screen()) end },
           { type = "header", label = "Historia (wykresy)" },
           cfgRow("number", "Probka co (s)", cfg.history, "interval", { min = 10, max = 600, step = 10 }),
           cfgRow("number", "Ilosc probek", cfg.history, "points", { min = 60, max = 4320, step = 60 }),
@@ -620,6 +621,46 @@ function G.new(ctx, opts)
           },
           { type = "action", label = "Aktualizuj teraz z GitHub", bg = colors.blue, run = runUpdate },
         }
+      end,
+    }
+  end
+
+  function Screens.screen()
+    local sc = ctx.cfg.screen
+    return {
+      title = "Ekran komputera",
+      rows = function()
+        local ids, labels = { "none" }, { none = "(brak)" }
+        for _, id in ipairs(ctx.moduleIds) do
+          if ctx.modules[id] and id ~= "menu" then ids[#ids + 1] = id; labels[id] = ctx.modules[id].name end
+        end
+        local w, h = 0, 0
+        if opts.localTerm then w, h = term.getSize() end
+        local rows = {
+          { type = "info", label = "Terminal (config CC)", value = opts.localTerm and (w .. "x" .. h) or "-" },
+          { type = "info", label = "Panele od szerokosci", value = "100 kolumn" },
+          cfgRow("choice", "Uklad", sc, "layout", { labels = { auto = "menu + panele", menu = "samo menu" },
+            choices = function() return { "auto", "menu" } end }),
+          cfgRow("number", "Kolumny paneli", sc, "cols", { min = 1, max = 4, step = 1 }),
+          cfgRow("number", "Szerokosc menu (0=auto)", sc, "menuWidth", { min = 0, max = 200, step = 5 }),
+          { type = "header", label = "Panele (moduly jak na monitorach)" },
+        }
+        for i = 1, 6 do
+          rows[#rows + 1] = {
+            type = "choice", label = "Panel " .. i, labels = labels,
+            choices = function() return ids end,
+            get = function() return sc.panels[i] or "none" end,
+            set = function(v)
+              sc.panels[i] = v
+              -- bez dziur w liscie
+              local packed = {}
+              for k = 1, 6 do if sc.panels[k] and sc.panels[k] ~= "none" then packed[#packed + 1] = sc.panels[k] end end
+              sc.panels = packed
+              changed()
+            end,
+          }
+        end
+        return rows
       end,
     }
   end
@@ -932,18 +973,137 @@ function G.runUpdate()
 end
 
 ---------------------------------------------------------------------------
+-- Ekran komputera bazy. Przy duzym terminalu (config CC: term_sizes.computer) menu dostaje kolumne
+-- po lewej, a reszta ekranu to siatka paneli z modulami (jak monitory, dzialaja na dotyk/klik).
+---------------------------------------------------------------------------
+local BIG_WIDTH = 100
+
+local function layoutKey(ctx, w, h)
+  local sc = ctx.cfg.screen
+  return table.concat({ w, h, sc.layout, sc.cols, sc.menuWidth, table.concat(sc.panels, ",") }, "|")
+end
+
+-- buduje okna: menu + panele; zwraca { menuWin, menuCanvas, panels = { {win, x, y, m} } }
+local function buildLayout(ctx, root, old)
+  local w, h = root.getSize()
+  local sc = ctx.cfg.screen
+  local L = { key = layoutKey(ctx, w, h), panels = {} }
+  local ids = {}
+  for _, id in ipairs(sc.panels) do
+    if id ~= "none" and id ~= "menu" and ctx.modules[id] then ids[#ids + 1] = id end
+  end
+  local big = sc.layout ~= "menu" and w >= BIG_WIDTH and #ids > 0
+  local menuW = w
+  if big then
+    menuW = sc.menuWidth > 0 and sc.menuWidth or math.floor(w * 0.3)
+    menuW = U.clamp(menuW, 51, w - 40)
+  end
+  L.big = big
+  L.menuW = menuW
+  L.menuWin = window.create(root, 1, 1, menuW, h, true)
+  L.menuCanvas = UI.canvas(L.menuWin)
+  if not big then return L end
+
+  -- siatka paneli w obszarze na prawo od menu (1 kolumna przerwy)
+  local ax, aw = menuW + 2, w - menuW - 1
+  local cols = U.clamp(sc.cols or 2, 1, #ids)
+  local rows = math.ceil(#ids / cols)
+  local pw = math.floor((aw - (cols - 1)) / cols)
+  local ph = math.floor((h - (rows - 1)) / rows)
+  for i, id in ipairs(ids) do
+    local col = (i - 1) % cols
+    local row = math.floor((i - 1) / cols)
+    local x = ax + col * (pw + 1)
+    local y = 1 + row * (ph + 1)
+    local wdt = (col == cols - 1) and (w - x + 1) or pw
+    local hgt = (row == rows - 1) and (h - y + 1) or ph
+    local win = window.create(root, x, y, wdt, hgt, false)
+    local mod = ctx.modules[id]
+    -- stan modulu zachowujemy przy przebudowie (np. historia bilansu energii)
+    local prev = old and old.panels[i] and old.panels[i].m
+    local m = {
+      name = "panel_" .. i,
+      cfg = { module = id, source = "auto", title = "", opts = (prev and prev.cfg.module == id) and prev.cfg.opts or {} },
+      state = (prev and prev.cfg.module == id) and prev.state or {},
+      accent = colors.cyan,
+      win = win,
+      canvas = UI.canvas(win),
+    }
+    m.opts = m.cfg.opts
+    for _, o in ipairs(mod.options or {}) do
+      if m.opts[o.key] == nil then m.opts[o.key] = o.default end
+    end
+    L.panels[#L.panels + 1] = { x = x, y = y, w = wdt, h = hgt, m = m, mod = mod }
+  end
+  -- separatory miedzy menu a panelami
+  root.setBackgroundColor(colors.gray)
+  for yy = 1, h do
+    root.setCursorPos(menuW + 1, yy)
+    root.write(" ")
+  end
+  return L
+end
+
+local function drawPanel(ctx, p)
+  local m = p.m
+  m.win.setVisible(false)
+  m.canvas:reset()
+  local ok, err = pcall(p.mod.draw, ctx, m, m.canvas)
+  if not ok then
+    m.canvas:clear(colors.black)
+    m.canvas:header("Blad: " .. p.mod.name, colors.red)
+    m.canvas:text(2, 3, U.trunc(tostring(err), m.canvas.w - 2), colors.red, colors.black)
+  end
+  m.win.setVisible(true)
+end
+
+local function updatePanel(ctx, p)
+  if p.mod.update then pcall(p.mod.update, ctx, p.m) end
+end
+
 -- menu na ekranie komputera bazy
 function G.run(ctx)
   local inst = G.new(ctx, { localTerm = true })
-  local canvas = UI.canvas(term.current())
+  local root = term.current()
+  local L
+  local function relayout()
+    root.setBackgroundColor(colors.black)
+    root.clear()
+    L = buildLayout(ctx, root, L)
+    for _, p in ipairs(L.panels) do updatePanel(ctx, p); drawPanel(ctx, p) end
+  end
+  local function drawMenu()
+    L.menuWin.setVisible(false)
+    inst.draw(L.menuCanvas)
+    L.menuWin.setVisible(true)
+  end
+  relayout()
+  drawMenu()
   local refresh = os.startTimer(1)
-  inst.draw(canvas)
   while not inst.exit do
     local e, a, b, y = os.pullEvent()
+    local menuEvent = true
     if e == "mouse_click" then
-      inst.click(b, y)
+      if b <= L.menuW then
+        inst.click(b, y)
+      else
+        menuEvent = false
+        for _, p in ipairs(L.panels) do
+          if b >= p.x and b < p.x + p.w and y >= p.y and y < p.y + p.h then
+            local btn = p.m.canvas:hit(b - p.x + 1, y - p.y + 1)
+            if btn and p.mod.touch then
+              p.m.flash = nil
+              local ok, err = pcall(p.mod.touch, ctx, p.m, btn)
+              if not ok then p.m.flash = { text = tostring(err), untilT = os.clock() + 3, ok = false } end
+              if ctx.feedback then ctx.feedback(not (p.m.flash and not p.m.flash.ok)) end
+              updatePanel(ctx, p)
+              drawPanel(ctx, p)
+            end
+          end
+        end
+      end
     elseif e == "mouse_scroll" then
-      inst.scroll(a)
+      if b <= L.menuW then inst.scroll(a) end
     elseif e == "key" then
       inst.key(a)
     elseif e == "char" then
@@ -952,10 +1112,20 @@ function G.run(ctx)
       for ch in a:gmatch(".") do inst.char(ch) end
     elseif e == "smart_update" then
       G.runUpdate()
+      relayout()
+    elseif e == "term_resize" then
+      relayout()
+    elseif e == "smart_tick" then
+      -- zmiana ustawien ekranu z menu -> przebudowa; inaczej odswiezenie paneli
+      if layoutKey(ctx, root.getSize()) ~= L.key then
+        relayout()
+      else
+        for _, p in ipairs(L.panels) do updatePanel(ctx, p); drawPanel(ctx, p) end
+      end
     elseif e == "timer" and a == refresh then
       refresh = os.startTimer(1)
     end
-    if e ~= "timer" or a ~= refresh then inst.draw(canvas) end
+    if menuEvent then drawMenu() end
   end
 end
 

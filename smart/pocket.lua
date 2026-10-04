@@ -83,13 +83,26 @@ local status, lastErr, lastOk = nil, nil, 0
 local scroll = 0
 local menuLines = nil -- ostatnia klatka pelnego menu z bazy
 
+-- przy duzym terminalu pocketa (config CC) klatka menu jest ograniczona i wysrodkowana:
+-- pelny ekran 240x135 to ~97 KB na klatke przez rednet
+local MENU_MAX_W, MENU_MAX_H = 80, 40
+local function menuBox()
+  local fw = math.min(c.w, MENU_MAX_W)
+  local fh = math.min(c.h - 1, MENU_MAX_H)
+  local ox = math.floor((c.w - fw) / 2)
+  local oy = math.floor((c.h - 1 - fh) / 2)
+  return fw, fh, ox, oy
+end
+
 -- zakladka Menu: pelne menu komputera bazy rysowane zdalnie (ostatni wiersz = pasek pilota)
 local function drawMenu()
   c:reset()
+  local fw, fh, ox, oy = menuBox()
+  if ox > 0 or oy > 0 then c:clear(colors.gray) end
   if menuLines then
     for y, l in ipairs(menuLines) do
-      if y < c.h and #l[1] == #l[2] and #l[1] == #l[3] then
-        term.setCursorPos(1, y)
+      if y <= fh and #l[1] == #l[2] and #l[1] == #l[3] and #l[1] <= c.w - ox then
+        term.setCursorPos(ox + 1, oy + y)
         term.blit(l[1], l[2], l[3])
       end
     end
@@ -202,7 +215,8 @@ end
 request = doRequest
 
 local function menuRequest(action, extra)
-  local msg = { cmd = "menu", action = action, w = c.w, h = c.h - 1 }
+  local fw, fh = menuBox()
+  local msg = { cmd = "menu", action = action, w = fw, h = fh }
   for k, v in pairs(extra or {}) do msg[k] = v end
   local reply = request(msg)
   if reply.ok and reply.lines then
@@ -229,9 +243,10 @@ while true do
   local e, a, b, y = os.pullEvent()
   if tab == "menu" and e ~= "timer" then
     if e == "mouse_click" then
-      if y < c.h then
-        menuRequest("click", { x = b, y = y })
-      else
+      local fw, fh, ox, oy = menuBox()
+      if y < c.h and b > ox and b <= ox + fw and y > oy and y <= oy + fh then
+        menuRequest("click", { x = b - ox, y = y - oy })
+      elseif y == c.h then
         local btn = c:hit(b, y)
         if btn and btn.id == "leave" then tab = "stan"; apply(request({ cmd = "status" })) end
       end

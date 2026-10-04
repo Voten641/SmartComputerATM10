@@ -47,16 +47,24 @@ Każdy monitor i każda maszyna pojawią się automatycznie.
   Moduł **Menu konfiguracji** daje na monitorze dotykowym *dokładnie to samo menu* co na komputerze
   (z klawiaturą ekranową do wpisywania i opcjonalną blokadą PIN-em).
 * **Na Pocket Computerze** – zakładka **Menu** w pilocie pokazuje pełne menu komputera bazy.
-  Moduł **Menu konfiguracji** daje na monitorze dotykowym *dokładnie to samo menu* co na komputerze
-  (z klawiaturą ekranową do wpisywania i opcjonalną blokadą PIN-em).
-* **Na Pocket Computerze** – zakładka **Menu** w pilocie pokazuje pełne menu komputera bazy.
+
+## Duży ekran komputera / pocketa
+
+Rozmiar terminala ustawia się w configu CC: Tweaked (`term_sizes` → `computer` / `pocket_computer`),
+nie da się go zmienić z programu – system sam go wykrywa. Monitory ten config nie dotyczy.
+
+* **Komputer** – od 100 kolumn menu zajmuje kolumnę po lewej, a reszta ekranu to siatka **paneli z modułami**
+  (domyślnie Energia, Alarmy, Przegląd bazy, Reaktor), działających na żywo i klikalnych jak monitory.
+  *Ustawienia → Ekran komputera*: układ, liczba kolumn, szerokość menu, do 6 paneli.
+* **Pocket** – zakładka Menu pobiera z bazy klatkę maks. 80×40 i rysuje ją na środku
+  (pełne 240×135 to ~97 KB na każde odświeżenie przez rednet).
+* Im większy terminal, tym mniejsze litery – CC mieści więcej znaków w tym samym oknie gry.
 
 ## Moduły ekranów
 
 | Moduł | Co pokazuje |
 |---|---|
 | Przegląd bazy | energia, reaktory, magazyny, gracze, alarmy |
-| Menu konfiguracji | pełne menu ustawień sterowane dotykiem; klawiatura ekranowa; blokada PIN-em pilota po bezczynności |
 | Menu konfiguracji | pełne menu ustawień sterowane dotykiem; klawiatura ekranowa; blokada PIN-em pilota po bezczynności |
 | Energia | zakładka **Energia**: magazyny FE, bilans chwilowy i **uśredniony** (okno 30 s–30 min), stabilny czas do pełna/rozładowania, wykres; zakładka **Źródła**: wszystkie źródła energii ze stanem, produkcją i przyciskami (reaktory WŁ/WYŁ/RESET + burn rate, fusion wtrysk, turbina tryb zrzutu, generatory Mekanism WŁ/WYŁ, Powah) oraz przełączniki redstone z tagiem `energia` |
 | Reaktor fission | stan, temperatura, paliwo/chłodziwo/odpady, START/SCRAM, burn rate z monitora |
@@ -118,12 +126,8 @@ innym wyświetlaczem Create. W *Menu → Wyświetlacze Create* wybierasz, co pok
 4. Zakładka **Menu**: pełne menu komputera bazy – wszystko co na komputerze (monitory, urządzenia, alarmy,
    autocrafting, wyświetlacze, ustawienia, aktualizacja). Klikasz jak na komputerze, wpisujesz z klawiatury
    pocketa, **<< Pilot** wraca do zakładek. Każdy pocket ma własną sesję menu.
-4. Zakładka **Menu**: pełne menu komputera bazy – wszystko co na komputerze (monitory, urządzenia, alarmy,
-   autocrafting, wyświetlacze, ustawienia, aktualizacja). Klikasz jak na komputerze, wpisujesz z klawiatury
-   pocketa, **<< Pilot** wraca do zakładek. Każdy pocket ma własną sesję menu.
 
 PIN chroni przed przypadkowym sterowaniem, ale wiadomości rednet nie są szyfrowane.
-Ten sam PIN (najlepiej same cyfry) odblokowuje menu na monitorach z włączoną blokadą.
 Ten sam PIN (najlepiej same cyfry) odblokowuje menu na monitorach z włączoną blokadą.
 
 ## Reaktor: podłącz Logic Adapter, nie Reactor Port

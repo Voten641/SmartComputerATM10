@@ -96,7 +96,11 @@ local function findText(o, s)
   end
 end
 
-local computerTerm = makeTerm(51, 19)
+-- SMART_TERM=240x135 -> duzy terminal komputera i pocketa (config CC term_sizes)
+local TW, TH = (os.getenv("SMART_TERM") or "51x19"):match("(%d+)x(%d+)")
+TW, TH = tonumber(TW), tonumber(TH)
+BIG = TW >= 100
+local computerTerm = makeTerm(TW, TH)
 local current = computerTerm
 term = setmetatable({}, { __index = function(_, k)
   if k == "current" then return function() return current end end
@@ -572,6 +576,14 @@ local function touchKey(mon, monName, ch)
   end
   check(false, "klawiatura ekranowa: brak klawisza '" .. ch .. "'")
 end
+-- przycisk "Wyczysc" w oknie wpisywania (ten obok OK, nie np. "Wyczysc historie" w liscie)
+local function clickInputClear()
+  for y, line in ipairs(computerTerm._t.lines) do
+    local x1, x2 = line:find("OK%s+")
+    if x1 and line:sub(x2 + 1, x2 + 7) == "Wyczysc" then os.queueEvent("mouse_click", 1, x2 + 2, y) return end
+  end
+  check(false, "GUI: brak przycisku Wyczysc w oknie wpisywania")
+end
 local function click(text)
   local x, y = findText(computerTerm, text)
   check(x ~= nil, "GUI: nie znaleziono '" .. text .. "'")
@@ -627,12 +639,12 @@ local seq = {
   function() click("Panel sterowania (") end,
   function() click("+ Dodaj") end,
   function() click("Nazwa") end,
-  function() click("Wyczysc") end,
+  clickInputClear,
   function() typeText("Pompa") end,
   back, back,
   function() click("Ustawienia i") end,
   function() click("Odswiezanie") end,
-  function() click("Wyczysc") end,
+  clickInputClear,
   function() typeText("2") end,
   back,
   function() click("Dziennik") end,
@@ -750,6 +762,27 @@ at(5, function()
   local r = reply(12)
   check(r and r.ok and r.lines and r.lines[1][1]:find("Monitory"), "menu zdalne: klikniecie nie otworzylo ekranu Monitory")
 end)
+-- duzy ekran komputera: panele z modulami obok menu, klikanie w panel
+if BIG then
+  local function findRight(text, minX)
+    for y, line in ipairs(computerTerm._t.lines) do
+      local x = line:find(text, minX or 1, true)
+      if x and x > (minX or 1) then return x, y end
+    end
+  end
+  at(3, function()
+    local menuW = math.max(51, math.floor(TW * 0.3))
+    check(findText(computerTerm, "Monitory  - co gdzie") ~= nil, "duzy ekran: brak menu")
+    local ex, ey = findRight("Zrodla", menuW + 1)
+    check(ex ~= nil, "duzy ekran: brak panelu Energia z zakladkami")
+    check(findRight("Alarmy", menuW + 1) ~= nil, "duzy ekran: brak panelu Alarmy")
+    if ex then os.queueEvent("mouse_click", 1, ex + 1, ey) end
+    bigShot = dump(computerTerm, "KOMPUTER " .. TW .. "x" .. TH)
+  end)
+  at(4, function()
+    check(findText(computerTerm, "Produkcja razem") ~= nil, "duzy ekran: klikniecie w panel nie przelaczylo zakladki")
+  end)
+end
 -- zakladka Zrodla na ekranie energii (monitor_big)
 at(10, function() touchText("monitor_big", bigMon, "Zrodla") end)
 at(11, function()
@@ -832,6 +865,7 @@ for _, s in ipairs(screens) do out[#out + 1] = s end
 if screensExtra then out[#out + 1] = screensExtra end
 if oskShot then out[#out + 1] = oskShot end
 if menuShot then out[#out + 1] = menuShot end
+if bigShot then out[#out + 1] = bigShot end
 if remoteShot then out[#out + 1] = remoteShot end
 -- monitory zrzucane przed wyjsciem nie sa dostepne (main czysci je), wiec rysujemy ponownie ponizej
 local fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
@@ -860,7 +894,10 @@ check(rednetHost ~= nil, "rednet.host nie wywolany")
 -- Faza 2: pilot na Pocket Computerze
 ---------------------------------------------------------------------------
 pocket = {}
-local pocketTerm = makeTerm(26, 20)
+local pocketTerm = BIG and makeTerm(TW, TH) or makeTerm(26, 20)
+-- klatka menu pilota: max 80x40, wysrodkowana
+local PFW, PFH = math.min(pocketTerm._t.w, 80), math.min(pocketTerm._t.h - 1, 40)
+local POX, POY = math.floor((pocketTerm._t.w - PFW) / 2), math.floor((pocketTerm._t.h - 1 - PFH) / 2)
 current = pocketTerm
 for k in pairs(queue) do queue[k] = nil end
 for k in pairs(timers) do timers[k] = nil end
@@ -905,7 +942,7 @@ local steps = {
   { "Alar", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
   { "Test alarmu", function() end },
   { "Menu", function(x, y) os.queueEvent("mouse_click", 1, x, y) end },
-  { "MENU BAZY", function() os.queueEvent("mouse_click", 1, 3, 5) end },
+  { "MENU BAZY", function() os.queueEvent("mouse_click", 1, POX + 3, POY + 5) end },
   { "MENU BAZY", function() os.queueEvent("char", "x") end },
   { "<< Pilot", function(x, y) pocketMenuShot = dump(pocketTerm, "POCKET: menu bazy"); os.queueEvent("mouse_click", 1, x, y) end },
   { "Reaktory", function() os.queueEvent("key", keys.q) end },
@@ -933,7 +970,8 @@ local acts = {}
 for _, m in ipairs(menuActions) do acts[#acts + 1] = m.action .. (m.action == "click" and ("@" .. m.x .. "," .. m.y) or "") .. (m.ch and (":" .. m.ch) or "") end
 local actStr = table.concat(acts, " ")
 check(actStr:find("frame") and actStr:find("click@3,5") and actStr:find("char:x"), "pilot menu: brak akcji (" .. actStr .. ")")
-check(menuActions[1] and menuActions[1].h == 19 and menuActions[1].w == 26, "pilot menu: zly rozmiar zadania")
+check(menuActions[1] and menuActions[1].h == PFH and menuActions[1].w == PFW,
+  "pilot menu: zly rozmiar zadania " .. tostring(menuActions[1] and menuActions[1].w) .. "x" .. tostring(menuActions[1] and menuActions[1].h))
 print("Pilot menu: " .. actStr)
 out[#out + 1] = pocketShot or dump(pocketTerm, "POCKET")
 fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()

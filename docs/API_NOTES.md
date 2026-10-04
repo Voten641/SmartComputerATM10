@@ -25,6 +25,9 @@ Gdy dokumentacja i kod się różnią, **obowiązuje kod**.
 - Monitor `setTextScale`: wielokrotność 0.5 w zakresie 0.5–5.
 - Speaker `playNote(instrument, volume 0–3, pitch 0–24)`, instrumenty m.in. `bell`, `pling`, `bit`, `chime`.
 - Pliki startowe: `startup.lua` **oraz** wszystkie pliki z katalogu `startup/`.
+- Rozmiar terminala: config `term_sizes.computer` / `term_sizes.pocket_computer` (width/height, znaki) oraz
+  `term_sizes.monitor` (maks. rozmiar monitora w blokach). Z Lua nie da sie go zmienic – tylko `getSize()`.
+- `window.getLine(y)` → `text, fg, bg` (stringi blit, od 1.84) – uzywane do wysylania klatek menu na pilota.
 
 ## Advanced Peripherals 0.8.1
 

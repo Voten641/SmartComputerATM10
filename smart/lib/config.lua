@@ -7,8 +7,15 @@ C.path = "/smart/data/config.lua"
 C.defaults = {
   title = "Baza ATM10",
   refresh = 1,            -- co ile sekund odswiezac dane
-  itemsEvery = 5,
-  clickSound = true,      -- dzwiek potwierdzenia klikniecia na monitorze (wymaga glosnika)         -- co ile odswiezen pobierac liste przedmiotow z ME/RS (ciezka operacja)
+  itemsEvery = 5,         -- co ile odswiezen pobierac liste przedmiotow z ME/RS (ciezka operacja)
+  clickSound = true,      -- dzwiek potwierdzenia klikniecia na monitorze (wymaga glosnika)
+  -- ekran komputera bazy: przy duzym terminalu (config CC term_sizes) menu po lewej + panele modulow
+  screen = {
+    layout = "auto",      -- "auto" = panele gdy terminal ma >= 100 kolumn, "menu" = samo menu
+    cols = 2,             -- kolumny siatki paneli
+    menuWidth = 0,        -- szerokosc kolumny menu (0 = automatycznie)
+    panels = { "energy", "alarms", "overview", "fission" },
+  },
   monitors = {},          -- [nazwaMonitora] = { module, source, scale, accent, title, opts }
   aliases = {},           -- [nazwaPeryferium] = "przyjazna nazwa"
   hidden = {},            -- [nazwaPeryferium] = true
