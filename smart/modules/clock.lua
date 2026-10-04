@@ -46,7 +46,7 @@ function mod.draw(ctx, m, c)
   if #t < 5 then t = "0" .. t end
   if c.w >= 20 and c.h >= 8 then
     c:bigCenter(y, t, colors.white)
-    y = y + 6
+    y = y + require("lib.ui").bigHeight() + 1
   else
     c:center(y, t, colors.white, colors.black)
     y = y + 2

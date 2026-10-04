@@ -27,7 +27,7 @@ function mod.draw(ctx, m, c)
   else
     for _, a in ipairs(list) do
       if y > c.h then break end
-      c:rect(1, y, c.w, 1, LEVEL[a.level])
+      c:card(1, y, c.w, 1, LEVEL[a.level])
       c:text(2, y, U.trunc(a.text, c.w - 2), colors.black, LEVEL[a.level])
       y = y + 1
     end

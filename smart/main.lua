@@ -10,6 +10,7 @@ local H = require("lib.history")
 local AC = require("lib.autocraft")
 local DS = require("lib.displays")
 local R = require("lib.remote")
+local TH = require("lib.theme")
 
 local MODULE_IDS = {
   "overview", "menu", "energy", "fission", "turbine", "boiler", "fusion",
@@ -91,6 +92,8 @@ local function setupMonitor(dev)
   local mcfg = C.monitor(ctx.cfg, dev.name)
   local mon = dev.p
   pcall(mon.setTextScale, mcfg.scale)
+  -- paleta motywu PRZED utworzeniem okna (okno kopiuje palete rodzica)
+  TH.apply(mon, ctx.cfg.theme)
   local w, h = mon.getSize()
   local win = window.create(mon, 1, 1, w, h, false)
   local old = ctx.monitors[dev.name]
@@ -110,6 +113,7 @@ local function setupMonitor(dev)
 end
 
 local function rebuild()
+  UI.setTheme(ctx.cfg.theme)
   D.scan(ctx.cfg)
   local mons = {}
   for _, d in ipairs(D.list) do
@@ -265,6 +269,7 @@ local function main()
   term.setCursorPos(1, 1)
   print("Smart System " .. ctx.version .. " - start...")
   pcall(H.load)
+  UI.setTheme(ctx.cfg.theme)
   rebuild()
   local gui = require("gui.menu")
   parallel.waitForAny(tickLoop, eventLoop, function() gui.run(ctx) end, function() R.loop(ctx) end)
@@ -272,7 +277,9 @@ end
 
 local ok, err = pcall(main)
 -- po wyjsciu zostawiamy monitory z informacja
+TH.reset(term.native())
 for _, m in pairs(ctx.monitors) do
+  pcall(TH.reset, m.mon)
   pcall(function()
     m.win.setVisible(true)
     m.mon.setBackgroundColor(colors.black)

@@ -28,6 +28,13 @@ Gdy dokumentacja i kod się różnią, **obowiązuje kod**.
 - Rozmiar terminala: config `term_sizes.computer` / `term_sizes.pocket_computer` (width/height, znaki) oraz
   `term_sizes.monitor` (maks. rozmiar monitora w blokach). Z Lua nie da sie go zmienic – tylko `getSize()`.
 - `window.getLine(y)` → `text, fg, bg` (stringi blit, od 1.84) – uzywane do wysylania klatek menu na pilota.
+- **Znaki rysujace 128–159** (sprawdzone na `term_font.png`): mozaika 2x3 subpikseli, znak = `128 + bity`,
+  bity TL=1, TR=2, ML=4, MR=8, BL=16; prawy dolny subpiksel zawsze w kolorze tla (dla "zapalonego" trzeba
+  zamienic kolory). Glif 6x9 px, wiec subpiksel = 3x3 px – kola sa okragle. Symbole: 16 ►, 17 ◄, 30 ▲, 31 ▼,
+  7 •, 19 ‼, 26 →, 140 = linia pozioma, 149 = lewa polowa komorki.
+- **Paleta**: `setPaletteColour(colour, 0xRRGGBB)` na terminalu/monitorze/oknie; `term.nativePaletteColour(c)`
+  daje domyslny kolor. `window.create` kopiuje palete rodzica w chwili tworzenia i naklada ja przy redraw –
+  palete ustawiamy na monitorze/terminalu przed tworzeniem okien.
 
 ## Advanced Peripherals 0.8.1
 

@@ -2,6 +2,18 @@
 package.path = "/smart/?.lua;/smart/?/init.lua;" .. package.path
 local U = require("lib.util")
 local UI = require("lib.ui")
+local TH = require("lib.theme")
+
+-- motyw (paleta) taki jak na komputerze bazy – przychodzi w odpowiedziach serwera
+local currentTheme
+local function setTheme(name)
+  name = name or "modern"
+  if name == currentTheme then return end
+  currentTheme = name
+  UI.setTheme(name)
+  TH.apply(term.current(), name)
+end
+setTheme("modern")
 
 local PROTO = "smart_atm10"
 local CFG_PATH = "/smart/data/pocket.lua"
@@ -200,6 +212,7 @@ end
 local request -- zdefiniowane nizej (forward)
 
 local function apply(reply)
+  if reply.theme then setTheme(reply.theme) end
   if reply.ok then
     status, lastErr, lastOk = reply.status or status, nil, os.clock()
   else
@@ -219,6 +232,7 @@ local function menuRequest(action, extra)
   local msg = { cmd = "menu", action = action, w = fw, h = fh }
   for k, v in pairs(extra or {}) do msg[k] = v end
   local reply = request(msg)
+  if reply.theme then setTheme(reply.theme) end
   if reply.ok and reply.lines then
     menuLines, lastErr, lastOk = reply.lines, nil, os.clock()
   else
@@ -285,6 +299,7 @@ while true do
   end
   draw()
 end
+TH.reset(term.current())
 term.setBackgroundColor(colors.black)
 term.clear()
 term.setCursorPos(1, 1)

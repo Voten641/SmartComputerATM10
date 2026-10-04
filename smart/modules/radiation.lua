@@ -38,7 +38,7 @@ function mod.draw(ctx, m, c)
   c:clear(colors.black)
   c:header(title, col, lvl)
   local y = 3
-  c:rect(2, y, c.w - 2, 3, col)
+  c:card(2, y, c.w - 2, 3, col)
   c:center(y + 1, U.sv(worst.r) .. "  " .. lvl, colors.black, col)
   y = y + 4
   for _, r in ipairs(rows) do

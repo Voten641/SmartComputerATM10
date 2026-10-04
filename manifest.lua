@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.1.3",
+  version = "1.2.0",
   files = {
     "install.lua",
     "update.lua",
@@ -10,10 +10,12 @@ return {
     "smart/lib/config.lua",
     "smart/lib/devices.lua",
     "smart/lib/displays.lua",
+    "smart/lib/gfx.lua",
     "smart/lib/history.lua",
     "smart/lib/mod.lua",
     "smart/lib/remote.lua",
     "smart/lib/sources.lua",
+    "smart/lib/theme.lua",
     "smart/lib/ui.lua",
     "smart/lib/util.lua",
     "smart/main.lua",
@@ -45,13 +47,15 @@ return {
     "update.lua",
     "startup/smart.lua",
     "smart/lib/util.lua",
+    "smart/lib/gfx.lua",
     "smart/lib/ui.lua",
+    "smart/lib/theme.lua",
     "smart/pocket.lua",
   },
   changelog = {
-    "Duzy terminal komputera (config CC term_sizes): menu po lewej + panele z modulami na zywo",
-    "Ustawienia > Ekran komputera: uklad, kolumny, szerokosc menu, panele",
-    "Pilot: klatka menu max 80x40 wysrodkowana na duzym ekranie (mniej danych po rednecie)",
-    "Poprawka README",
+    "Nowy wyglad (nowoczesny): wlasna paleta, gladkie paski, wykresy z siatka, okragly wskaznik energii, zaokraglone przyciski i karty, przelaczniki",
+    "Ustawienia > Wyglad: nowoczesny / klasyczny",
+    "Menu: karty, linie sekcji, przelaczniki, klawiatura ekranowa z odstepami",
+    "Pilot: ten sam motyw co baza",
   },
 }

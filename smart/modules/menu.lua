@@ -32,7 +32,7 @@ local function drawLock(ctx, m, c)
   c:header(M.title(m, "Menu - zablokowane"), colors.red)
   local entry = string.rep("*", #(st.pinEntry or ""))
   c:center(3, "Wpisz PIN:", colors.lightGray, colors.black)
-  c:rect(math.floor(c.w / 2) - 5, 4, 11, 1, colors.white)
+  c:card(math.floor(c.w / 2) - 5, 4, 11, 1, colors.white)
   c:center(4, entry ~= "" and entry or " ", colors.black, colors.white)
   -- klawiatura numeryczna 3x4
   local keysPad = { "1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "OK" }

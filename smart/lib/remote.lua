@@ -46,6 +46,7 @@ function R.status(ctx)
   local f, stored, cap = ctx.auto.readEnergy("auto")
   local st = {
     title = ctx.cfg.title,
+    theme = ctx.cfg.theme,
     time = textutils.formatTime(os.time("ingame"), true),
     energy = f and { f = f, stored = stored, cap = cap } or nil,
     reactors = {}, controls = {}, alarms = {},
@@ -120,7 +121,7 @@ function R.menu(ctx, sender, msg)
   end
   local lines = menuFrame(s)
   s.drawn = true
-  return { ok = true, lines = lines, input = s.menu.isInput() }
+  return { ok = true, lines = lines, input = s.menu.isInput(), theme = ctx.cfg.theme }
 end
 
 function R.handle(ctx, msg, sender)

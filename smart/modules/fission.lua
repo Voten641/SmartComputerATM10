@@ -64,7 +64,7 @@ function mod.draw(ctx, m, c)
   c:header(title, m.accent, stxt)
   local w, y = c.w - 2, 3
 
-  c:rect(2, y, w, 1, scol)
+  c:card(2, y, w, 1, scol)
   c:center(y, stxt .. (st.trip and (" - " .. st.trip) or ""), colors.black, scol, 2, w)
   y = y + 2
 

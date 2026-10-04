@@ -8,6 +8,7 @@ C.defaults = {
   title = "Baza ATM10",
   refresh = 1,            -- co ile sekund odswiezac dane
   itemsEvery = 5,         -- co ile odswiezen pobierac liste przedmiotow z ME/RS (ciezka operacja)
+  theme = "modern",       -- wyglad: "modern" (nowoczesny) albo "classic" (kolory CC)
   clickSound = true,      -- dzwiek potwierdzenia klikniecia na monitorze (wymaga glosnika)
   -- ekran komputera bazy: przy duzym terminalu (config CC term_sizes) menu po lewej + panele modulow
   screen = {

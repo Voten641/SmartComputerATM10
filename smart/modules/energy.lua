@@ -205,13 +205,41 @@ function mod.draw(ctx, m, c)
   drawTabs(c, m, tab)
   local w, y = c.w, 4
   local col = require("lib.ui").levelColor(st.frac)
+  -- obszar statystyk (przy szerokim ekranie obok wskaznika)
+  local sx, sw = 2, w - 2
+  local gaugeBottom = 0
 
-  if o.big and c.h >= 17 and c.w >= 18 then
+  if UI.modern and o.big and c.h >= 18 and c.w >= 30 then
+    -- okragly wskaznik z procentem w srodku
+    local side = c.w >= 60
+    local size = (side and c.h >= 26) and 30 or 24
+    local gw = math.ceil(size / 2)
+    local gx = side and 2 or (math.floor((w - gw) / 2) + 1)
+    local _, gh = c:gauge(gx, y, size, st.frac, col, colors.gray)
+    local pct = string.format("%d%%", math.floor(st.frac * 100 + 0.5))
+    local tw, th = require("lib.gfx").textCells(pct, 1)
+    local thick = math.max(2, math.floor(size / 7))
+    local inner = math.floor((size - 2 * thick) / 2) -- wnetrze pierscienia w komorkach
+    local cy = y + math.floor(gh / 2) - 1
+    if tw <= inner - 2 then
+      c:big(gx + math.floor((gw - tw) / 2), cy, pct, colors.white)
+    else
+      c:center(cy + 1, pct, colors.white, colors.black, gx, gw)
+    end
+    c:center(y + gh - 1, "energia", colors.lightGray, colors.black, gx, gw)
+    if side then
+      sx, sw = gx + gw + 3, w - (gx + gw + 3)
+      gaugeBottom = y + gh
+      y = y + 1
+    else
+      y = y + gh + 1
+    end
+  elseif o.big and c.h >= 17 and c.w >= 18 then
     local s = string.format("%d%%", math.floor(st.frac * 100 + 0.5))
     c:bigCenter(y, s, col)
-    y = y + 6
+    y = y + UI.bigHeight() + 1
   end
-  c:bar(2, y, w - 2, st.frac, col, colors.gray, U.fmt(st.stored, "FE") .. " / " .. U.fmt(st.cap, "FE"))
+  c:bar(sx, y, sw, st.frac, col, colors.gray, U.fmt(st.stored, "FE") .. " / " .. U.fmt(st.cap, "FE"))
   y = y + 2
 
   local net = st.net or 0
@@ -219,31 +247,32 @@ function mod.draw(ctx, m, c)
   local win = AVG_LABEL[o.avg or 300] or "?"
   if st.inp then
     local ai, ao = avg and avg.inp or st.inp, avg and avg.out or st.out
-    c:kv(2, y, w - 2, "Wejscie (sr. " .. win .. ")", U.fmt(ai, "FE/t"), colors.lightGray, colors.lime); y = y + 1
-    c:kv(2, y, w - 2, "Wyjscie (sr. " .. win .. ")", U.fmt(ao, "FE/t"), colors.lightGray, colors.orange); y = y + 1
+    c:kv(sx, y, sw, "Wejscie (sr. " .. win .. ")", U.fmt(ai, "FE/t"), colors.lightGray, colors.lime); y = y + 1
+    c:kv(sx, y, sw, "Wyjscie (sr. " .. win .. ")", U.fmt(ao, "FE/t"), colors.lightGray, colors.orange); y = y + 1
   end
-  c:kv(2, y, w - 2, "Bilans teraz", (net >= 0 and "+" or "") .. U.fmt(net, "FE/t"), colors.lightGray, net >= 0 and colors.lime or colors.red)
+  c:kv(sx, y, sw, "Bilans teraz", (net >= 0 and "+" or "") .. U.fmt(net, "FE/t"), colors.lightGray, net >= 0 and colors.lime or colors.red)
   y = y + 1
   if avg then
     local an = avg.net
     local lbl = "Bilans sr. " .. (avg.full and win or (U.fmtTime(avg.span) .. "/" .. win))
-    c:kv(2, y, w - 2, lbl, (an >= 0 and "+" or "") .. U.fmt(an, "FE/t"), colors.lightGray, an >= 0 and colors.lime or colors.red)
+    c:kv(sx, y, sw, lbl, (an >= 0 and "+" or "") .. U.fmt(an, "FE/t"), colors.lightGray, an >= 0 and colors.lime or colors.red)
     y = y + 1
     -- czas liczony ze sredniego bilansu (FE na sekunde rzeczywista) – stabilny
     if avg.perSec > 0.5 then
-      c:kv(2, y, w - 2, "Do pelna", U.fmtTime((st.cap - st.stored) / avg.perSec), colors.lightGray, colors.white)
+      c:kv(sx, y, sw, "Do pelna", U.fmtTime((st.cap - st.stored) / avg.perSec), colors.lightGray, colors.white)
       y = y + 1
     elseif avg.perSec < -0.5 then
-      c:kv(2, y, w - 2, "Do rozladowania", U.fmtTime(st.stored / -avg.perSec), colors.lightGray, colors.red)
+      c:kv(sx, y, sw, "Do rozladowania", U.fmtTime(st.stored / -avg.perSec), colors.lightGray, colors.red)
       y = y + 1
     else
-      c:kv(2, y, w - 2, "Stan", "stabilny", colors.lightGray, colors.lime)
+      c:kv(sx, y, sw, "Stan", "stabilny", colors.lightGray, colors.lime)
       y = y + 1
     end
   else
-    c:kv(2, y, w - 2, "Bilans sredni", "zbieranie danych...", colors.lightGray, colors.gray)
+    c:kv(sx, y, sw, "Bilans sredni", "zbieranie danych...", colors.lightGray, colors.gray)
     y = y + 1
   end
+  y = math.max(y, gaugeBottom + 1)
 
   if o.list and #st.list > 1 and c.h - y >= 4 then
     y = y + 1

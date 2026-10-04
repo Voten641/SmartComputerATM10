@@ -1,6 +1,7 @@
 -- Smart System: menu konfiguracji – to samo menu na komputerze, monitorze dotykowym i pilocie (Pocket)
 local U = require("lib.util")
 local UI = require("lib.ui")
+local GFX = require("lib.gfx")
 local D = require("lib.devices")
 local A = require("lib.auto")
 
@@ -58,7 +59,7 @@ function G.new(ctx, opts)
     return ""
   end
 
-  local function draw()
+  local function drawClassic()
     local s = stack[#stack]
     canvas:reset()
     canvas:clear(colors.black)
@@ -130,6 +131,128 @@ function G.new(ctx, opts)
     end
   end
 
+  -- nowoczesny wyglad: karty z zaokragleniami, przelaczniki, linie sekcji (znaki mozaikowe)
+  local function drawModern()
+    local s = stack[#stack]
+    canvas:reset()
+    canvas:clear(colors.black)
+    local w, h = canvas.w, canvas.h
+    local CH_RULE, CH_BAR = string.char(140), string.char(149)
+
+    -- naglowek: karta na calej szerokosci, przycisk wstecz albo znacznik akcentu
+    canvas:rect(1, 1, w, 1, colors.gray)
+    canvas.bg = colors.gray
+    local x0 = 3
+    if #stack > 1 then
+      canvas:button("back", 2, 1, 3, 1, string.char(17), colors.white, colors.blue)
+      x0 = 6
+    else
+      canvas:text(1, 1, CH_BAR, colors.cyan, colors.gray)
+    end
+    local alarms = #A.list()
+    local right = alarms > 0 and (string.char(19) .. " " .. alarms .. " ") or (string.char(7) .. " OK ")
+    canvas:text(x0, 1, U.trunc(s.title, w - x0 - #right - 1), colors.white, colors.gray)
+    canvas:right(1, right, alarms > 0 and colors.red or colors.lime, colors.gray)
+    canvas.bg = colors.black
+
+    local rows = s.rows()
+    s.lastRows = rows
+    local top, bottom = 3, h - 1
+    local visible = bottom - top + 1
+    local maxScroll = math.max(0, #rows - visible)
+    s.scroll = U.clamp(s.scroll or 0, 0, maxScroll)
+    local barW = maxScroll > 0 and 2 or 0
+    local right0 = w - 1 - barW          -- prawa krawedz tresci
+    local vw = math.min(24, math.floor(w * 0.42))
+    for i = 1, visible do
+      local idx = i + s.scroll
+      local r = rows[idx]
+      if not r then break end
+      local y = top + i - 1
+      if r.type ~= "header" and r.type ~= "info" then
+        canvas:zone("row", 1, y, w - barW, 1, idx)
+      end
+      if r.type == "header" then
+        -- naglowek sekcji: tekst + cienka linia do konca
+        local label = r.label ~= "" and r.label:upper() or ""
+        if label ~= "" then
+          label = U.trunc(label, right0 - 3)
+          canvas:text(2, y, label, colors.cyan, colors.black)
+          local lx = 3 + #label
+          if right0 >= lx then canvas:text(lx, y, string.rep(CH_RULE, right0 - lx + 1), colors.gray, colors.black) end
+        end
+      elseif r.type == "info" then
+        canvas:kv(2, y, right0 - 1, r.label, U.trunc(valueText(r), vw), colors.lightGray, r.color or colors.white)
+      elseif r.type == "action" then
+        -- kolejne akcje tworza jedna karte (zaokraglona tylko na gorze i dole grupy)
+        local prev, nxt = rows[idx - 1], rows[idx + 1]
+        local first = i == 1 or not prev or prev.type ~= "action"
+        local last = i == visible or not nxt or nxt.type ~= "action"
+        canvas:rect(2, y, right0 - 1, 1, colors.gray)
+        local function corner(cx, side)
+          local pm = GFX.pixmap(2, 3)
+          GFX.fillRect(pm, 0, 0, 2, 3, colors.gray)
+          if first then GFX.set(pm, side, 0, nil) end
+          if last then GFX.set(pm, side, 2, nil) end
+          GFX.draw(canvas.t, cx, y, pm, colors.black)
+        end
+        if first or last then corner(2, 0); corner(right0, 1) end
+        -- kolor akcji jako znacznik i kolor tekstu (zamiast pelnego tla)
+        local accent = (r.bg and r.bg ~= colors.gray) and r.bg or nil
+        -- kolor akcji ma pierwszenstwo (r.fg bywa czarny – byl dobrany pod kolorowe tlo w klasycznym)
+        local fg = accent or r.fg or colors.white
+        if accent then canvas:text(3, y, CH_BAR, accent, colors.gray) end
+        local v = valueText(r)
+        canvas:text(4, y, U.trunc(r.label, right0 - 6 - (v ~= "" and vw or 0)), fg, colors.gray)
+        canvas:right(y, (v ~= "" and (U.trunc(v, vw) .. " ") or "") .. string.char(16) .. " ", r.vfg or colors.lightGray, colors.gray, right0)
+      elseif r.type == "toggle" then
+        canvas:text(2, y, U.trunc(r.label, right0 - 9), colors.white, colors.black)
+        local on = r.get() and true or false
+        canvas:text(right0 - 9, y, on and "WL " or "WYL", on and colors.lime or colors.lightGray, colors.black)
+        canvas:switch("row", right0 - 5, y, on, idx, 5)
+      elseif r.type == "number" then
+        canvas:text(2, y, U.trunc(r.label, right0 - vw - 2), colors.white, colors.black)
+        local vx = right0 - vw + 1
+        canvas:button("dec", vx, y, 3, 1, "-", colors.white, colors.gray, idx)
+        canvas:button("inc", right0 - 2, y, 3, 1, "+", colors.white, colors.gray, idx)
+        canvas:center(y, U.trunc(valueText(r), vw - 8), colors.cyan, colors.black, vx + 4, vw - 8)
+        canvas:zone("row", vx + 4, y, vw - 8, 1, idx)
+      else
+        -- choice / text: wartosc w zaokraglonej "pigulce"
+        canvas:text(2, y, U.trunc(r.label, right0 - vw - 2), colors.white, colors.black)
+        local cx = right0 - vw + 1
+        canvas:card(cx, y, vw, 1, colors.gray)
+        local icon = r.type == "choice" and string.char(31) or string.char(26)
+        canvas:text(cx + 1, y, U.trunc(valueText(r), vw - 4), colors.white, colors.gray)
+        canvas:text(cx + vw - 3, y, icon, colors.lightGray, colors.gray)
+        canvas:zone("row", cx, y, vw, 1, idx)
+      end
+    end
+    if maxScroll > 0 then
+      -- cienki pasek przewijania
+      local sx = w - 1
+      for yy = top, bottom do canvas:text(sx, yy, CH_BAR, colors.gray, colors.black) end
+      local thumbH = math.max(1, math.floor(visible * visible / #rows))
+      local pos = top + math.floor((visible - thumbH) * s.scroll / maxScroll)
+      for yy = pos, pos + thumbH - 1 do canvas:text(sx, yy, CH_BAR, colors.cyan, colors.black) end
+      canvas:zone("up", sx - 1, top, 2, math.floor(visible / 2))
+      canvas:zone("down", sx - 1, top + math.floor(visible / 2), 2, visible - math.floor(visible / 2))
+    end
+    -- stopka
+    canvas:rect(1, h, w, 1, colors.gray)
+    if message and os.clock() < message.untilT then
+      canvas:text(1, h, CH_BAR, message.color, colors.gray)
+      canvas:text(3, h, U.trunc(message.text, w - 3), message.color, colors.gray)
+    else
+      canvas:text(3, h, U.trunc("Smart " .. ctx.version .. (opts.localTerm and "   Backspace = wstecz" or ""), w - 3), colors.lightGray, colors.gray)
+    end
+  end
+
+  local function draw()
+    if UI.modern then return drawModern() end
+    return drawClassic()
+  end
+
   -- wpisywanie tekstu: nieblokujace (klawiatura komputera/pocketa albo klawiatura ekranowa na monitorze)
   local KB = { "1234567890", "qwertyuiop", "asdfghjkl:", "zxcvbnm_.-" }
 
@@ -145,38 +268,45 @@ function G.new(ctx, opts)
 
   local function drawInput()
     local w, h = canvas.w, canvas.h
-    local kbH = opts.osk and 5 or 0
+    -- klawiatura z odstepami miedzy rzedami (klawisze nie zlewaja sie w paski), jesli jest miejsce
+    local gap = (opts.osk and h >= 24) and 1 or 0
+    local kbH = opts.osk and (5 + 4 * gap) or 0
     local bh = 5
     local by = opts.osk and math.max(2, h - kbH - bh) or math.max(2, math.floor((h - bh) / 2) + 1)
     local bx, bw = 2, w - 2
-    canvas:rect(bx, by, bw, bh, colors.blue)
-    canvas:text(bx + 1, by, U.trunc(input.title, bw - 2), colors.white, colors.blue)
-    canvas:rect(bx + 1, by + 1, bw - 2, 1, colors.black)
+    local boxBg = UI.modern and colors.gray or colors.blue
+    canvas:card(bx, by, bw, bh, boxBg)
+    canvas.bg = boxBg
+    canvas:text(bx + 2, by, U.trunc(input.title, bw - 4), UI.modern and colors.cyan or colors.white, boxBg)
+    canvas:card(bx + 1, by + 1, bw - 2, 1, colors.black)
     local v = input.value
-    if #v > bw - 3 then v = v:sub(-(bw - 3)) end
-    canvas:text(bx + 1, by + 1, v .. "_", colors.white, colors.black)
+    if #v > bw - 5 then v = v:sub(-(bw - 5)) end
+    canvas:text(bx + 2, by + 1, v .. "_", colors.white, colors.black)
     if not opts.osk then
-      canvas:text(bx + 1, by + 2, U.trunc("Pisz z klawiatury, Enter = OK", bw - 2), colors.lightBlue, colors.blue)
+      canvas:text(bx + 2, by + 2, U.trunc("Pisz z klawiatury, Enter = OK", bw - 4), UI.modern and colors.lightGray or colors.lightBlue, boxBg)
     end
     local third = math.floor((bw - 4) / 3)
     canvas:button("in_ok", bx + 1, by + 3, third, 1, "OK", colors.black, colors.lime)
     canvas:button("in_clear", bx + 2 + third, by + 3, third, 1, "Wyczysc", colors.white, colors.orange)
     canvas:button("in_cancel", bx + 3 + third * 2, by + 3, bw - 4 - third * 2, 1, "Anuluj", colors.white, colors.red)
+    canvas.bg = colors.black
     if opts.osk then
       local ky = h - kbH + 1
       canvas:rect(1, ky - 1, w, kbH + 1, colors.black)
       local kw = math.max(1, math.floor((w - 1) / 10))
+      local step = 1 + gap
       for r, row in ipairs(KB) do
         for i = 1, #row do
           local ch = row:sub(i, i)
           if shift then ch = ch:upper() end
-          canvas:button("in_key", 2 + (i - 1) * kw, ky + r - 1, math.max(1, kw - (kw > 2 and 1 or 0)), 1, ch, colors.white, colors.gray, ch)
+          canvas:button("in_key", 2 + (i - 1) * kw, ky + (r - 1) * step, math.max(1, kw - (kw > 2 and 1 or 0)), 1, ch, colors.white, colors.gray, ch)
         end
       end
       local q = math.floor((w - 2) / 3)
-      canvas:button("in_shift", 2, ky + 4, q - 1, 1, shift and "abc" or "ABC", colors.black, colors.lightGray)
-      canvas:button("in_key", 2 + q, ky + 4, q - 1, 1, "spacja", colors.black, colors.lightGray, " ")
-      canvas:button("in_bksp", 2 + q * 2, ky + 4, w - 2 - q * 2, 1, "<-", colors.white, colors.orange)
+      local ly = ky + 4 * step
+      canvas:button("in_shift", 2, ly, q - 1, 1, shift and "abc" or "ABC", colors.black, colors.lightGray)
+      canvas:button("in_key", 2 + q, ly, q - 1, 1, "spacja", colors.black, colors.lightGray, " ")
+      canvas:button("in_bksp", 2 + q * 2, ly, w - 2 - q * 2, 1, "<-", colors.white, colors.orange)
     end
   end
 
@@ -596,6 +726,8 @@ function G.new(ctx, opts)
           cfgRow("text", "Nazwa bazy", cfg, "title"),
           cfgRow("number", "Odswiezanie (s)", cfg, "refresh", { min = 0.5, max = 10, step = 0.5 }),
           cfgRow("number", "Lista ME/RS co N odswiezen", cfg, "itemsEvery", { min = 1, max = 60, step = 1 }),
+          cfgRow("choice", "Wyglad", cfg, "theme", { labels = require("lib.theme").LABELS,
+            choices = function() return require("lib.theme").NAMES end }),
           cfgRow("toggle", "Dzwiek klikniecia (glosnik)", cfg, "clickSound"),
           { type = "action", label = "Ekran komputera (duzy terminal)", run = function() push(Screens.screen()) end },
           { type = "header", label = "Historia (wykresy)" },
@@ -980,7 +1112,7 @@ local BIG_WIDTH = 100
 
 local function layoutKey(ctx, w, h)
   local sc = ctx.cfg.screen
-  return table.concat({ w, h, sc.layout, sc.cols, sc.menuWidth, table.concat(sc.panels, ",") }, "|")
+  return table.concat({ w, h, sc.layout, sc.cols, sc.menuWidth, table.concat(sc.panels, ","), tostring(ctx.cfg.theme) }, "|")
 end
 
 -- buduje okna: menu + panele; zwraca { menuWin, menuCanvas, panels = { {win, x, y, m} } }
@@ -1067,6 +1199,8 @@ function G.run(ctx)
   local root = term.current()
   local L
   local function relayout()
+    UI.setTheme(ctx.cfg.theme)
+    require("lib.theme").apply(root, ctx.cfg.theme)
     root.setBackgroundColor(colors.black)
     root.clear()
     L = buildLayout(ctx, root, L)

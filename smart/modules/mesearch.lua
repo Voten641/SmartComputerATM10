@@ -56,7 +56,7 @@ function mod.draw(ctx, m, c)
   c:clear(colors.black)
   c:header(title, m.accent, #(st.results or {}) .. " wynikow")
   -- pole wyszukiwania
-  c:rect(2, 2, c.w - 2, 1, colors.white)
+  c:card(2, 2, c.w - 2, 1, colors.white)
   c:text(3, 2, U.trunc(st.query ~= "" and st.query or "dotknij liter...", c.w - 4), st.query ~= "" and colors.black or colors.gray, colors.white)
 
   local kbH = 4

@@ -48,6 +48,13 @@ Każdy monitor i każda maszyna pojawią się automatycznie.
   (z klawiaturą ekranową do wpisywania i opcjonalną blokadą PIN-em).
 * **Na Pocket Computerze** – zakładka **Menu** w pilocie pokazuje pełne menu komputera bazy.
 
+## Wygląd
+
+*Ustawienia → Wygląd*: **nowoczesny** (domyślnie) albo **klasyczny** (dawne kolory CC).
+Nowoczesny wygląd używa własnej palety kolorów i znaków rysujących CC (2×3 subpiksele na znak):
+gładkie paski z zaokrąglonymi końcami, wykresy z siatką, okrągły wskaźnik energii, zaokrąglone przyciski
+i karty, przełączniki WŁ/WYŁ, klawiatura ekranowa z odstępami. Dotyczy komputera, monitorów, paneli i pilota.
+
 ## Duży ekran komputera / pocketa
 
 Rozmiar terminala ustawia się w configu CC: Tweaked (`term_sizes` → `computer` / `pocket_computer`),

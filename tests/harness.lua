@@ -32,20 +32,48 @@ keys = { q = 16, backspace = 14, up = 200, down = 208, pageUp = 201, pageDown = 
 ---------------------------------------------------------------------------
 -- terminal z buforem
 ---------------------------------------------------------------------------
+local HEXC = {}
+for i = 0, 15 do HEXC[2 ^ i] = ("0123456789abcdef"):sub(i + 1, i + 1) end
+local DEFAULT_PAL = {
+  0xF0F0F0, 0xF2B233, 0xE57FD8, 0x99B2F2, 0xDEDE6C, 0x7FCC19, 0xF2B2CC, 0x4C4C4C,
+  0x999999, 0x4C99B2, 0xB266E5, 0x3366CC, 0x7F664C, 0x57A64E, 0xCC4C4C, 0x111111,
+}
 local function makeTerm(w, h, isColor)
-  local t = { w = w, h = h, cx = 1, cy = 1, fg = colors.white, bg = colors.black, lines = {}, bgs = {} }
+  local t = { w = w, h = h, cx = 1, cy = 1, fg = colors.white, bg = colors.black, lines = {}, fgl = {}, bgl = {}, pal = {} }
+  for i = 1, 16 do t.pal[i] = DEFAULT_PAL[i] end
   local function blank()
-    t.lines, t.bgs = {}, {}
-    for y = 1, t.h do t.lines[y] = string.rep(" ", t.w); t.bgs[y] = {} end
+    t.lines, t.fgl, t.bgl = {}, {}, {}
+    for y = 1, t.h do
+      t.lines[y] = string.rep(" ", t.w)
+      t.fgl[y] = string.rep(HEXC[t.fg], t.w)
+      t.bgl[y] = string.rep(HEXC[t.bg], t.w)
+    end
   end
   blank()
   local o = {}
   o._t = t
+  local function put(s, f, b)
+    local y = t.cy
+    if y >= 1 and y <= t.h then
+      local x1 = t.cx
+      local a1 = math.max(1, x1)
+      local a2 = math.min(t.w, x1 + #s - 1)
+      if a2 >= a1 then
+        local off = a1 - x1
+        local n = a2 - a1 + 1
+        local function splice(line, piece) return line:sub(1, a1 - 1) .. piece .. line:sub(a2 + 1) end
+        t.lines[y] = splice(t.lines[y], s:sub(off + 1, off + n))
+        t.fgl[y] = splice(t.fgl[y], f:sub(off + 1, off + n))
+        t.bgl[y] = splice(t.bgl[y], b:sub(off + 1, off + n))
+      end
+    end
+    t.cx = t.cx + #s
+  end
   function o.getSize() return t.w, t.h end
   function o.setCursorPos(x, y) t.cx, t.cy = math.floor(x), math.floor(y) end
   function o.getCursorPos() return t.cx, t.cy end
-  function o.setTextColor(c) assert(type(c) == "number", "zly kolor"); t.fg = c end
-  function o.setBackgroundColor(c) assert(type(c) == "number", "zly kolor tla"); t.bg = c end
+  function o.setTextColor(c) assert(HEXC[c], "zly kolor"); t.fg = c end
+  function o.setBackgroundColor(c) assert(HEXC[c], "zly kolor tla"); t.bg = c end
   o.setTextColour, o.setBackgroundColour = o.setTextColor, o.setBackgroundColor
   function o.getTextColor() return t.fg end
   function o.getBackgroundColor() return t.bg end
@@ -55,33 +83,61 @@ local function makeTerm(w, h, isColor)
   function o.getCursorBlink() return false end
   function o.write(s)
     s = tostring(s)
+    put(s, string.rep(HEXC[t.fg], #s), string.rep(HEXC[t.bg], #s))
+  end
+  function o.blit(s, f, b)
+    assert(#s == #f and #s == #b, "blit: rozne dlugosci")
+    assert(not f:find("[^0-9a-f]") and not b:find("[^0-9a-f]"), "blit: zly kolor")
+    put(s, f, b)
+  end
+  function o.clear() blank() end
+  function o.clearLine()
     local y = t.cy
     if y >= 1 and y <= t.h then
-      local line = t.lines[y]
-      for i = 1, #s do
-        local x = t.cx + i - 1
-        if x >= 1 and x <= t.w then
-          line = line:sub(1, x - 1) .. s:sub(i, i) .. line:sub(x + 1)
-          t.bgs[y][x] = t.bg
-        end
-      end
-      t.lines[y] = line
+      t.lines[y] = string.rep(" ", t.w)
+      t.bgl[y] = string.rep(HEXC[t.bg], t.w)
+      t.fgl[y] = string.rep(HEXC[t.fg], t.w)
     end
-    t.cx = t.cx + #s
   end
-  function o.blit(s) o.write(s) end
-  function o.clear() blank() end
-  function o.clearLine() t.lines[t.cy] = string.rep(" ", t.w) end
   function o.scroll(n)
-    for _ = 1, n do table.remove(t.lines, 1); t.lines[#t.lines + 1] = string.rep(" ", t.w) end
+    for _ = 1, n do
+      table.remove(t.lines, 1); t.lines[#t.lines + 1] = string.rep(" ", t.w)
+      table.remove(t.fgl, 1); t.fgl[#t.fgl + 1] = string.rep(HEXC[t.fg], t.w)
+      table.remove(t.bgl, 1); t.bgl[#t.bgl + 1] = string.rep(HEXC[t.bg], t.w)
+    end
   end
   function o.redraw() end
-  function o.getPaletteColor() return 0, 0, 0 end
-  function o.setPaletteColor() end
+  function o.setPaletteColour(c, r, g, b)
+    local i = math.floor(math.log(c, 2) + 0.5) + 1
+    if g == nil then t.pal[i] = r else t.pal[i] = math.floor(r * 255) * 65536 + math.floor(g * 255) * 256 + math.floor(b * 255) end
+  end
+  o.setPaletteColor = o.setPaletteColour
+  function o.getPaletteColour(c)
+    local v = t.pal[math.floor(math.log(c, 2) + 0.5) + 1]
+    return math.floor(v / 65536) / 255, (math.floor(v / 256) % 256) / 255, (v % 256) / 255
+  end
+  o.getPaletteColor = o.getPaletteColour
   return o
 end
 
+-- zrzut do pliku podgladu PNG (tests/render_preview.py): naglowek + wiersze tekst/fg/bg + paleta
+previewFile = nil
+function previewDump(o, title)
+  if not previewFile then return end
+  local t = o._t
+  previewFile:write("@@SCREEN ", title, " ", t.w, " ", t.h, "\n")
+  local pal = {}
+  for i = 1, 16 do pal[i] = string.format("%06X", t.pal[i]) end
+  previewFile:write(table.concat(pal, " "), "\n")
+  for y = 1, t.h do
+    previewFile:write(t.lines[y], "\n", t.fgl[y], "\n", t.bgl[y], "\n")
+  end
+end
+
+if os.getenv("SMART_PREVIEW") then previewFile = io.open(TMP .. "/preview.txt", "wb") end
+
 local function dump(o, title)
+  if previewDump then previewDump(o, title) end
   local t = o._t
   local out = { "+" .. string.rep("-", t.w) .. "+ " .. (title or "") }
   for y = 1, t.h do out[#out + 1] = "|" .. t.lines[y] .. "|" end
@@ -106,22 +162,32 @@ term = setmetatable({}, { __index = function(_, k)
   if k == "current" then return function() return current end end
   if k == "redirect" then return function(t) local old = current; current = t; return old end end
   if k == "native" then return function() return computerTerm end end
+  if k == "nativePaletteColour" or k == "nativePaletteColor" then
+    return function(c)
+      local v = DEFAULT_PAL[math.floor(math.log(c, 2) + 0.5) + 1]
+      return math.floor(v / 65536) / 255, (math.floor(v / 256) % 256) / 255, (v % 256) / 255
+    end
+  end
   return function(...) return current[k](...) end
 end })
 
 window = {}
 function window.create(parent, x, y, w, h, visible)
   local win = makeTerm(w, h, parent.isColor())
+  -- jak w CC: okno kopiuje palete rodzica przy tworzeniu
+  if parent._t then for i = 1, 16 do win._t.pal[i] = parent._t.pal[i] end end
   local vis = visible ~= false
   local function flush()
     if not vis then return end
+    if parent._t then for i = 1, 16 do parent._t.pal[i] = win._t.pal[i] end end
     for yy = 1, h do
       parent.setCursorPos(x, y + yy - 1)
-      parent.write(win._t.lines[yy])
+      parent.blit(win._t.lines[yy], win._t.fgl[yy], win._t.bgl[yy])
     end
   end
-  local origWrite = win.write
+  local origWrite, origBlit = win.write, win.blit
   function win.write(s) origWrite(s); if vis then flush() end end
+  function win.blit(s, f, b) origBlit(s, f, b); if vis then flush() end end
   function win.setVisible(v) vis = v; if v then flush() end end
   function win.isVisible() return vis end
   function win.reposition(nx, ny, nw, nh)
@@ -133,8 +199,7 @@ function window.create(parent, x, y, w, h, visible)
   end
   function win.getPosition() return x, y end
   function win.getLine(yy)
-    local t = win._t.lines[yy]
-    return t, string.rep("0", #t), string.rep("f", #t)
+    return win._t.lines[yy], win._t.fgl[yy], win._t.bgl[yy]
   end
   return win
 end
@@ -524,6 +589,7 @@ cfg.autocraft = { enabled = true, bridge = "auto", every = 1, items = {
   { name = "minecraft:nopattern", label = "", keep = 5, batch = 64, enabled = true },
 } }
 cfg.remote = { enabled = true, pin = "1234" }
+cfg.theme = os.getenv("SMART_THEME") or "modern"
 cfg.monitors.monitor_menu = { module = "menu", scale = 1, accent = "cyan", opts = { lock = true, lockAfter = 120 } }
 cfg.history = { interval = 1, points = 100 }
 cfg.monitors.monitor_tiny = { module = "fission", scale = 0.5, accent = "red", opts = {} }
@@ -564,7 +630,7 @@ local function typeText(str)
 end
 -- klawisz klawiatury ekranowej: szukamy wiersza klawiatury i litery w nim
 local function touchKey(mon, monName, ch)
-  local rowsPat = { "1%s+2%s+3", "q%s+w%s+e", "a%s+s%s+d", "z%s+x%s+c" }
+  local rowsPat = { "1[^%w]+2[^%w]+3", "q[^%w]+w[^%w]+e", "a[^%w]+s[^%w]+d", "z[^%w]+x[^%w]+c" }
   for y = #mon._t.lines, 1, -1 do
     local line = mon._t.lines[y]
     for _, pat in ipairs(rowsPat) do
@@ -579,8 +645,10 @@ end
 -- przycisk "Wyczysc" w oknie wpisywania (ten obok OK, nie np. "Wyczysc historie" w liscie)
 local function clickInputClear()
   for y, line in ipairs(computerTerm._t.lines) do
-    local x1, x2 = line:find("OK%s+")
-    if x1 and line:sub(x2 + 1, x2 + 7) == "Wyczysc" then os.queueEvent("mouse_click", 1, x2 + 2, y) return end
+    if line:find("OK", 1, true) and line:find("Anuluj", 1, true) then
+      local x = line:find("Wyczysc", 1, true)
+      if x then os.queueEvent("mouse_click", 1, x + 1, y) return end
+    end
   end
   check(false, "GUI: brak przycisku Wyczysc w oknie wpisywania")
 end
@@ -604,7 +672,7 @@ at(3, function()
   check(reactor.active, "reaktor nie wystartowal z monitora")
   touchText("monitor_3", mons.fission, "+1")
   touchText("monitor_12", mons.control, "Lampy")
-  touchText("monitor_7", mons.storage, "v")
+  touchText("monitor_7", mons.storage, os.getenv("SMART_THEME") == "classic" and "v" or string.char(31)) -- strzalka w dol
 end)
 at(4, function()
   check(reactor.burn == 6, "burn rate nie zmienil sie: " .. tostring(reactor.burn))
@@ -713,8 +781,10 @@ at(4, function() touchText("monitor_menu", menuMon, "Nazwa bazy") end)
 at(5, function()
   check(findText(menuMon, "spacja") ~= nil, "menu monitora: brak klawiatury ekranowej")
   for y, line in ipairs(menuMon._t.lines) do
-    local a, b = line:find("OK%s+")
-    if a and line:sub(b + 1, b + 7) == "Wyczysc" then os.queueEvent("monitor_touch", "monitor_menu", b + 2, y) end
+    if line:find("OK", 1, true) and line:find("Anuluj", 1, true) then
+      local x = line:find("Wyczysc", 1, true)
+      if x then os.queueEvent("monitor_touch", "monitor_menu", x + 1, y) end
+    end
   end
 end)
 at(6, function()
@@ -724,13 +794,15 @@ end)
 at(7, function()
   check(findText(menuMon, "baza_") ~= nil, "menu monitora: tekst nie wpisany z klawiatury ekranowej")
   for y, line in ipairs(menuMon._t.lines) do
-    local x = line:find("OK%s+Wyczysc")
-    if x then os.queueEvent("monitor_touch", "monitor_menu", x, y) end
+    if line:find("Wyczysc", 1, true) and line:find("Anuluj", 1, true) then
+      local x = line:find("OK", 1, true)
+      if x then os.queueEvent("monitor_touch", "monitor_menu", x, y) end
+    end
   end
 end)
 at(8, function()
   menuShot = dump(menuMon, "monitor_menu (menu na monitorze)")
-  touchText("monitor_menu", menuMon, "<")
+  touchText("monitor_menu", menuMon, os.getenv("SMART_THEME") == "classic" and "<" or string.char(17)) -- przycisk wstecz
 end)
 -- menu zdalne (serwer): klatka, klikniecie w wiersz
 at(3, function()
@@ -977,6 +1049,7 @@ out[#out + 1] = pocketShot or dump(pocketTerm, "POCKET")
 fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); fo:close()
 print("Pilot wyslal: " .. joined)
 
+if previewFile then previewFile:close() end
 print("Wywolania: " .. table.concat(calls, ", "))
 print("Chat: " .. table.concat(chatMsgs, " | "))
 io.stdout:write(table.concat(printed, "\n"), "\n")
