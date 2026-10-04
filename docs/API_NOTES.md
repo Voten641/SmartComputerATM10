@@ -31,6 +31,10 @@ Gdy dokumentacja i kod się różnią, **obowiązuje kod**.
   Reguly sprawdzane po kolei, **pierwsza pasujaca akcja wygrywa** (`PartialOptions.merge`); `host` to domena, IP
   albo CIDR. Plik: `computercraft-server.toml`. `http.get/post{ url, body, headers, timeout }` – timeout domyslnie
   30 s, maks. 60 s, liczony jako brak danych (ReadTimeoutHandler). Blad: `nil, komunikat, odpowiedz`.
+- Ollama `/api/chat`: `tools = [{type="function", function={name, description, parameters}}]`; odpowiedz
+  `message.tool_calls[].function.{name, arguments}` (arguments = obiekt, takze przy stream=true); wynik odsylamy
+  jako `{role="tool", tool_name, content}` po wiadomosci asystenta z `tool_calls`. Model bez narzedzi zwraca blad
+  "... does not support tools" (HTTP 400) – wtedy ponawiamy bez `tools`.
 - `textutils.serialiseJSON(t, { unicode_strings = true })` – stringi traktowane jako UTF-8 (od 1.106);
   `unserialiseJSON` zamienia `\uXXXX` na UTF-8.
 - `window.getLine(y)` → `text, fg, bg` (stringi blit, od 1.84) – uzywane do wysylania klatek menu na pilota.

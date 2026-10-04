@@ -213,6 +213,7 @@ local function tick()
   ok, err = pcall(AC.tick, ctx)
   if not ok then A.logEvent("Blad autocraftingu: " .. tostring(err), "warn") end
   pcall(H.sample, ctx)
+  pcall(CB.progress, ctx)
   pcall(DS.tick, ctx)
   for _, m in pairs(ctx.monitors) do
     updateMonitor(m)

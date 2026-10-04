@@ -53,6 +53,9 @@ C.defaults = {
       context = true,      -- dolaczaj aktualne dane bazy do pytania
       think = false,       -- false = wylacz "myslenie" modeli rozumujacych (szybsze odpowiedzi)
       prompt = "",         -- wlasny prompt systemowy (puste = domyslny)
+      placeholder = "toast", -- informacja "mysle..." po pytaniu: "toast" (bez spamu na czacie), "chat" albo "off"
+      placeholderText = "Mysle nad odpowiedzia...",
+      progressEvery = 20,  -- co ile sekund "nadal mysle" przy dlugim generowaniu (0 = wylacz)
     },
   },
   alarms = {

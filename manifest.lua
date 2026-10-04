@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.3.1",
+  version = "1.3.2",
   files = {
     "install.lua",
     "update.lua",
@@ -55,7 +55,9 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Ollama: oryginalny blad CC + podpowiedz w menu i dzienniku",
-    "Menu Czat i AI: wiersz 'Laczy z' i 'Blad CC'",
+    "AI widzi magazyn ME/RS: narzedzie szukaj_w_magazynie (przedmioty, plyny, chemikalia, dokladne ilosci)",
+    "Modele bez narzedzi: pasujace pozycje i top magazynu w kontekscie",
+    "Chatbot AI: toast 'Mysle nad odpowiedzia...' zaraz po pytaniu, 'Nadal mysle' co 20 s z kolejka",
+    "Zawsze odpowiedz przy bledzie bota/modelu",
   },
 }

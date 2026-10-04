@@ -529,9 +529,11 @@ add("powah:reactor_part_0", { "powah:reactor_part", "uraninite_reactor", "energy
 local items = {}
 crafts, exports = {}, {}
 for i = 1, 40 do items[i] = { name = "minecraft:item_" .. i, displayName = "Przedmiot " .. i, count = i * 37, isCraftable = i % 5 == 0 } end
+items[#items + 1] = { name = "minecraft:diamond", displayName = "Diamond", count = 1234, isCraftable = false }
 add("me_bridge_0", { "me_bridge" }, {
   isConnected = function() return true end, isOnline = function() return true end,
   getItems = function(f) assert(type(f) == "table") return items end,
+  getFluids = function(f) assert(type(f) == "table") return { { name = "minecraft:water", displayName = "Water", count = 500000 } } end,
   getUsedItemStorage = function() return 97000 end, getMaxItemStorage = function() return 100000 end,
   getUsedFluidStorage = function() return 10 end, getMaxFluidStorage = function() return 100 end,
   getStoredEnergy = function() return 1000 end, getEnergyCapacity = function() return 1600 end,
@@ -567,12 +569,19 @@ add("environment_detector_0", { "environment_detector" }, {
 radiation = 0.0000001
 local chatMsgs = {}
 chatOpts = {}
+toasts = {}
 add("chat_box_0", { "chat_box" }, {
   sendMessage = function(msg, opts)
     assert(type(opts) == "table")
     assert(#msg <= 1024, "wiadomosc za dluga dla Chat Boxa")
     chatMsgs[#chatMsgs + 1] = msg
     chatOpts[#chatOpts + 1] = opts
+    return true
+  end,
+  sendToast = function(o)
+    assert(type(o) == "table" and type(o.title) == "string" and type(o.message) == "string", "sendToast: title/message wymagane")
+    assert(type(o.player) == "string" and o.player ~= "", "sendToast: player wymagany")
+    toasts[#toasts + 1] = { t = os.clock(), player = o.player, text = o.message }
     return true
   end,
 })
@@ -665,7 +674,32 @@ http = {
     if o.url ~= "http://ollama.test:11434/api/chat" then return nil, "Domain not permitted" end
     local req = textutils.unserialiseJSON(o.body)
     ollamaRequests[#ollamaRequests + 1] = req
-    local q = req.messages[#req.messages].content
+    local last = req.messages[#req.messages]
+    local q = last.content
+    local function stream(answer, calls)
+      local msg = '{"role":"assistant","content":' .. jenc(answer or "")
+      if calls then msg = msg .. ',"tool_calls":' .. calls end
+      return resp(msg and ('{"message":' .. msg .. '},"done":false}\n{"message":{"role":"assistant","content":""},"done":true}') or "")
+    end
+    -- model bez narzedzi: blad jak w prawdziwej Ollamie (HTTP 400)
+    if req.tools and q:find("bez narzedzi") then
+      return nil, "Bad Request", resp('{"error":"registry.ollama.ai/library/qwen3 does not support tools"}', 400)
+    end
+    -- wynik narzedzia -> odpowiedz na jego podstawie
+    if last.role == "tool" then
+      local cnt = q:match("Diamond %(minecraft:diamond%): ([%w%.]+)")
+      return stream("Masz " .. tostring(cnt) .. " diamentow w magazynie.")
+    end
+    -- pytanie o diamenty przy dostepnych narzedziach -> wywolanie narzedzia (po angielsku)
+    if req.tools and q:find("diament") then
+      return stream("", '[{"function":{"name":"szukaj_w_magazynie","arguments":{"fraza":"diamond"}}}]')
+    end
+    if q:find("bez narzedzi") then
+      local cnt = req.messages[1].content:match("Diamond %(minecraft:diamond%): ([%w%.]+)")
+      return stream(cnt and ("Z kontekstu: " .. cnt .. " diamentow.") or "Brak danych o magazynie.")
+    end
+    if q:find("wolno") then sleep(12) end            -- wolny model
+    if q:find("awaria") then error("model padl") end -- awaria w trakcie
     local answer
     if q:find("dlugo") then
       answer = string.rep("Bardzo dluga odpowiedz modelu. ", 25)
@@ -705,7 +739,7 @@ cfg.autocraft = { enabled = true, bridge = "auto", every = 1, items = {
 } }
 cfg.remote = { enabled = true, pin = "1234" }
 cfg.theme = os.getenv("SMART_THEME") or "modern"
-cfg.chatbot = { enabled = true, trigger = "smart", prefix = "Smart", ai = { enabled = true, url = "ollama.test:11434", model = "qwen3:8b", maxTokens = 200, memory = 2 } }
+cfg.chatbot = { enabled = true, trigger = "smart", prefix = "Smart", ai = { enabled = true, url = "ollama.test:11434", model = "qwen3:8b", maxTokens = 200, memory = 2, progressEvery = 5 } }
 cfg.monitors.monitor_menu = { module = "menu", scale = 1, accent = "cyan", opts = { lock = true, lockAfter = 120 } }
 cfg.history = { interval = 1, points = 100 }
 cfg.monitors.monitor_tiny = { module = "fission", scale = 0.5, accent = "red", opts = {} }
@@ -1023,6 +1057,14 @@ at(6, function()
   os.queueEvent("chat", "uuid-2", "Steve", "smart odpowiedz dlugo", false, "smart odpowiedz dlugo")
   os.queueEvent("chat", "uuid-2", "Steve", "smart", false, "smart")
 end)
+-- AI a magazyn ME/RS: narzedzie szukaj_w_magazynie, potem model bez narzedzi (kontekst)
+at(9, function() os.queueEvent("chat", "uuid-2", "Steve", "smart ile mam diamentow?", false, "smart ile mam diamentow?") end)
+at(22, function() os.queueEvent("chat", "uuid-2", "Steve", "smart bez narzedzi: ile mam diamond", false, "smart bez narzedzi: ile mam diamond") end)
+-- placeholder: wolny model (pingi "nadal mysle"), kolejka, awaria
+at(7, function()
+  os.queueEvent("chat", "uuid-3", "Alex", "smart licz wolno", false, "smart licz wolno")
+  os.queueEvent("chat", "uuid-1", "Voten641", "$smart awaria", true, "smart awaria")
+end)
 -- historia
 at(10, function() check(findText(mons.history, "Brak danych") == nil, "historia: brak danych mimo probek") end)
 -- wyswietlacz Create
@@ -1097,7 +1139,9 @@ check(si_ and chatOpts[si_].player == nil and chatOpts[si_].prefix == "Smart" an
 local ai_
 for i, m in ipairs(chatMsgs) do if m:sub(1, 7) == "Alarmy:" then ai_ = i end end
 check(ai_ and chatOpts[ai_].player == "Voten641", "chatbot: pytanie z $ powinno dostac prywatna odpowiedz")
-check(chatIndex("smartfon") == nil and #ollamaRequests == 2, "chatbot: 'smartfon' nie powinien byc pytaniem (zapytan AI: " .. #ollamaRequests .. ")")
+local sf = false
+for _, r in ipairs(ollamaRequests) do if r.messages[#r.messages].content:find("smartfon", 1, true) then sf = true end end
+check(chatIndex("smartfon") == nil and not sf, "chatbot: 'smartfon' nie powinien byc pytaniem")
 local q1 = ollamaRequests[1]
 check(q1 and q1.model == "qwen3:8b" and q1.stream == true and q1.think == false, "ollama: zle parametry zapytania")
 check(q1 and q1.messages[1].role == "system" and q1.messages[1].content:find("Aktualne dane bazy", 1, true), "ollama: brak danych bazy w prompcie")
@@ -1113,6 +1157,36 @@ local parts = 0
 for _, m in ipairs(chatMsgs) do if m:find("Bardzo dluga odpowiedz", 1, true) then parts = parts + 1; check(#m <= 240, "chatbot: czesc odpowiedzi > 240 znakow") end end
 check(parts >= 3, "chatbot: dluga odpowiedz nie zostala podzielona (" .. parts .. ")")
 check(chatIndex("Komendy: smart status") ~= nil, "chatbot: samo 'smart' powinno pokazac pomoc")
+-- placeholder (toast, domyslnie): "mysle..." przy kazdym pytaniu do AI, nie przy komendach
+local function toastsFor(player, pat)
+  local n = 0
+  for _, t in ipairs(toasts) do if t.player == player and t.text:find(pat, 1, true) then n = n + 1 end end
+  return n
+end
+check(toastsFor("Steve", "Mysle nad odpowiedzia") == 4, "placeholder: brak toastu 'mysle' dla pytan AI Steve'a")
+-- AI widzi magazyn: wywolanie narzedzia i odpowiedz z liczba
+local toolReq
+for _, r in ipairs(ollamaRequests) do
+  local l = r.messages[#r.messages]
+  if l.role == "tool" then toolReq = r end
+end
+check(toolReq and toolReq.messages[#toolReq.messages].tool_name == "szukaj_w_magazynie", "magazyn: brak wyniku narzedzia szukaj_w_magazynie")
+check(toolReq and toolReq.messages[#toolReq.messages - 1].role == "assistant" and toolReq.messages[#toolReq.messages - 1].tool_calls,
+  "magazyn: brak wiadomosci asystenta z tool_calls przed wynikiem")
+check(toolReq and toolReq.tools and #toolReq.tools == 2, "magazyn: brak definicji narzedzi w zapytaniu")
+check(chatIndex("Masz 1234 diamentow w magazynie.") ~= nil, "magazyn: AI nie podala liczby diamentow z ME")
+check(chatIndex("Z kontekstu: 1234 diamentow.") ~= nil, "magazyn: model bez narzedzi nie dostal magazynu w kontekscie")
+check(toastsFor("Alex", "Mysle nad odpowiedzia") == 1, "placeholder: brak toastu 'mysle' dla Alexa")
+check(toastsFor("Voten641", "Mysle nad odpowiedzia") == 1, "placeholder: toast 'mysle' tylko dla pytania do AI (nie dla komend)")
+check(toastsFor("Alex", "Nadal mysle... (5 s)") == 1 and toastsFor("Alex", "Nadal mysle... (10 s)") == 1,
+  "placeholder: brak pingow 'nadal mysle' przy wolnym modelu")
+check(toastsFor("Alex", "w kolejce:") >= 1, "placeholder: brak informacji o kolejce")
+for _, m in ipairs(chatMsgs) do check(not m:find("Mysle nad", 1, true), "placeholder: toast nie powinien trafiac na czat") end
+-- awaria modelu -> gracz dostaje odpowiedz z bledem (prywatnie, bo pytanie z $)
+local errIdx
+for i, m in ipairs(chatMsgs) do if m:find("AI nie odpowiada", 1, true) and m:find("model padl", 1, true) then errIdx = i end end
+check(errIdx and chatOpts[errIdx].player == "Voten641", "awaria AI: brak prywatnej odpowiedzi z bledem")
+check(chatIndex("Bardzo dluga") ~= nil and chatIndex("Energia jest") ~= nil, "chatbot: odpowiedzi AI po wolnym modelu")
 -- diagnostyka polaczenia z Ollama: podpowiedz + oryginalny komunikat CC
 local O = require("lib.ollama")
 local l1, e1 = O.listModels("http://10.0.1.12:11434")

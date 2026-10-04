@@ -11,6 +11,7 @@ CB.queue = {}      -- pytania czekajace na obsluge
 CB.history = {}    -- [gracz] = { {role, content}, ... } (pamiec rozmowy z AI)
 CB.busy = false
 CB.last = nil      -- ostatnie pytanie/odpowiedz (do podgladu w menu)
+CB.current = nil   -- pytanie przetwarzane teraz przez AI { player, hidden, started, lastPing }
 
 CB.DEFAULT_PROMPT = "Jestes asystentem bazy w Minecraft (modpack All The Mods 10 To The Sky), "
   .. "sterowanej przez system Smart System na komputerach CC: Tweaked. Odpowiadaj krotko po polsku, "
@@ -90,6 +91,136 @@ function CB.baseStatus(ctx)
 end
 
 ---------------------------------------------------------------------------
+-- magazyn ME/RS dla AI: przedmioty, plyny i chemikalia ze wszystkich bridge'y (pamiec podreczna 10 s)
+local stock = { t = -1000, list = {} }
+
+local function loadStock()
+  local now = U.now()
+  if now - stock.t < 10 then return stock.list end
+  local list = {}
+  for _, d in ipairs(D.byKind({ "me", "rs" })) do
+    local sys = d.kind == "me" and "ME" or "RS"
+    for _, src in ipairs({ { "getItems", "przedmiot", "" }, { "getFluids", "plyn", " mB" }, { "getChemicals", "chemikalia", " mB" } }) do
+      local res = U.call(d.p, src[1], {})
+      if type(res) == "table" then
+        for _, it in ipairs(res) do
+          list[#list + 1] = {
+            name = U.itemName(it), id = it.name or "?", count = U.itemCount(it),
+            kind = src[2], unit = src[3], craft = it.isCraftable == true, sys = sys,
+          }
+        end
+      end
+    end
+  end
+  stock.t, stock.list = now, list
+  return list
+end
+
+local function fmtStock(e)
+  -- dokladna liczba (AI ma podac gracz dokladnie ile ma)
+  return string.format("%s (%s): %s%s %s%s", e.name, e.id, tostring(math.floor(e.count)), e.unit,
+    e.kind, e.craft and ", da sie scraftowac" or "")
+end
+
+-- wyszukiwanie: wszystkie slowa frazy musza wystapic w nazwie lub id (bez wielkosci liter)
+function CB.searchStock(phrase, limit)
+  local words = {}
+  for w in tostring(phrase or ""):lower():gmatch("[%w_:]+") do words[#words + 1] = w end
+  local out = {}
+  for _, e in ipairs(loadStock()) do
+    local hay = ((e.name .. " " .. e.id):lower():gsub("_", " "))
+    local ok = #words > 0
+    for _, w in ipairs(words) do
+      local needle = (w:gsub("_", " "))
+      if not hay:find(needle, 1, true) then ok = false break end
+    end
+    if ok then out[#out + 1] = e end
+  end
+  table.sort(out, function(a, b) return a.count > b.count end)
+  local r = {}
+  for i = 1, math.min(#out, limit or 15) do r[i] = out[i] end
+  return r, #out
+end
+
+function CB.topStock(limit)
+  local all = {}
+  for _, e in ipairs(loadStock()) do all[#all + 1] = e end
+  table.sort(all, function(a, b) return a.count > b.count end)
+  local r = {}
+  for i = 1, math.min(#all, limit or 20) do r[i] = all[i] end
+  return r, #all
+end
+
+-- narzedzia dla modeli z obsluga tool calling (Ollama: tools / tool_calls)
+CB.TOOLS = {
+  {
+    type = "function",
+    ["function"] = {
+      name = "szukaj_w_magazynie",
+      description = "Szuka przedmiotow, plynow i chemikaliow w magazynie ME/RS bazy i zwraca ich ilosci. "
+        .. "Nazwy w magazynie sa PO ANGIELSKU (np. diamond, iron ingot, redstone) - przetlumacz fraze na angielski. "
+        .. "Uzywaj zawsze, gdy gracz pyta czy ma cos albo ile czegos ma.",
+      parameters = {
+        type = "object",
+        properties = {
+          fraza = { type = "string", description = "angielska nazwa lub jej fragment, np. 'diamond' albo 'iron ingot'" },
+        },
+        required = { "fraza" },
+      },
+    },
+  },
+  {
+    type = "function",
+    ["function"] = {
+      name = "najwiecej_w_magazynie",
+      description = "Zwraca przedmioty/plyny, ktorych w magazynie ME/RS jest najwiecej.",
+      parameters = {
+        type = "object",
+        properties = {
+          ile = { type = "number", description = "ile pozycji zwrocic (domyslnie 15)" },
+        },
+      },
+    },
+  },
+}
+
+function CB.runTool(name, args)
+  if #D.byKind({ "me", "rs" }) == 0 then return "Brak ME/RS Bridge podlaczonego do systemu." end
+  if name == "szukaj_w_magazynie" then
+    local found, total = CB.searchStock(args.fraza, 15)
+    if total == 0 then return "Nic nie znaleziono dla '" .. tostring(args.fraza) .. "' (0 sztuk w magazynie)." end
+    local lines = {}
+    for _, e in ipairs(found) do lines[#lines + 1] = fmtStock(e) end
+    return "Znaleziono " .. total .. ":\n" .. table.concat(lines, "\n")
+  elseif name == "najwiecej_w_magazynie" then
+    local top, total = CB.topStock(math.max(1, math.min(40, math.floor(tonumber(args.ile) or 15))))
+    local lines = {}
+    for _, e in ipairs(top) do lines[#lines + 1] = fmtStock(e) end
+    return "Rodzajow w magazynie: " .. total .. ". Najwiecej:\n" .. table.concat(lines, "\n")
+  end
+  return "nieznane narzedzie: " .. tostring(name)
+end
+
+-- kontekst magazynu dla modeli BEZ narzedzi: trafienia slow z pytania + najliczniejsze pozycje
+local function stockContext(question)
+  if #D.byKind({ "me", "rs" }) == 0 then return nil end
+  local lines, seen = {}, {}
+  for w in tostring(question):lower():gmatch("[%w_]+") do
+    if #w >= 3 then
+      for _, e in ipairs((CB.searchStock(w, 5))) do
+        if not seen[e.id .. e.kind] then seen[e.id .. e.kind] = true; lines[#lines + 1] = fmtStock(e) end
+      end
+    end
+  end
+  local top = CB.topStock(20)
+  local t = {}
+  for _, e in ipairs(top) do t[#t + 1] = fmtStock(e) end
+  local out = "Magazyn ME/RS (nazwy po angielsku)."
+  if #lines > 0 then out = out .. "\nPasujace do pytania:\n- " .. table.concat(lines, "\n- ") end
+  return out .. "\nNajwiecej w magazynie:\n- " .. table.concat(t, "\n- ")
+end
+
+---------------------------------------------------------------------------
 -- komendy wbudowane (dzialaja bez AI)
 local COMMANDS = {}
 
@@ -163,6 +294,34 @@ function CB.onChat(ctx, uuid, player, message, hidden, utf8msg)
   os.queueEvent("smart_chatbot")
 end
 
+-- krotka informacja dla pytajacego: na czacie albo jako toast (bez zasmiecania czatu)
+local function notice(ctx, q, text)
+  local c = ctx.cfg.chatbot
+  local mode = c.ai.placeholder or "toast"
+  if mode == "off" then return end
+  local prefix = c.prefix ~= "" and c.prefix or "Smart"
+  if mode == "toast" then
+    ctx.auto.say({ toast = true, title = prefix .. " AI", text = text, player = q.player, prefix = prefix, utf8 = true })
+  else
+    ctx.auto.say({ text = text, player = (q.hidden or c.private) and q.player or nil, prefix = prefix, utf8 = true })
+  end
+end
+
+-- wywolywane co odswiezenie: "nadal mysle" podczas dlugiego generowania
+function CB.progress(ctx)
+  local cur = CB.current
+  if not cur then return end
+  local every = tonumber(ctx.cfg.chatbot.ai.progressEvery) or 20
+  if every <= 0 then return end
+  local now = U.now()
+  if now - cur.lastPing >= every then
+    cur.lastPing = now
+    local t = "Nadal mysle... (" .. math.floor(now - cur.started) .. " s)"
+    if #CB.queue > 0 then t = t .. ", w kolejce: " .. #CB.queue end
+    notice(ctx, cur, t)
+  end
+end
+
 local function askAI(ctx, q)
   local ai = ctx.cfg.chatbot.ai
   local hist = CB.history[q.player] or {}
@@ -170,10 +329,26 @@ local function askAI(ctx, q)
   if ai.context ~= false then
     sys = sys .. "\nAktualne dane bazy:\n- " .. table.concat(CB.baseStatus(ctx), "\n- ")
   end
+  local useTools = not O.noTools[ai.model]
+  if useTools then
+    sys = sys .. "\nO zawartosc magazynu (przedmioty, plyny, ilosci) pytaj narzedziem szukaj_w_magazynie - "
+      .. "nie zgaduj. Nazwy w magazynie sa po angielsku."
+  else
+    local sc = stockContext(q.text)
+    if sc then sys = sys .. "\n" .. sc end
+  end
   local messages = { { role = "system", content = sys } }
   for _, m in ipairs(hist) do messages[#messages + 1] = m end
   messages[#messages + 1] = { role = "user", content = q.player .. ": " .. q.text }
-  local answer, err = O.chat(ai, messages)
+  local answer, err = O.chat(ai, messages, CB.TOOLS, CB.runTool)
+  -- model okazal sie bez narzedzi: jeszcze raz z zawartoscia magazynu w kontekscie
+  if useTools and O.noTools[ai.model] and answer then
+    local sc = stockContext(q.text)
+    if sc then
+      messages[1].content = messages[1].content .. "\n" .. sc
+      answer, err = O.chat(ai, messages)
+    end
+  end
   if not answer then return nil, err end
   -- pamiec rozmowy: ostatnie N wymian na gracza
   hist[#hist + 1] = { role = "user", content = q.player .. ": " .. q.text }
@@ -194,7 +369,14 @@ function CB.handle(ctx, q)
   elseif COMMANDS[cmd] and arg == "" then
     answer = COMMANDS[cmd](ctx, c.trigger)
   elseif c.ai.enabled then
-    local res, err = askAI(ctx, q)
+    -- od razu wiadomo, ze bot zyje: "mysle..." (+ pozycja w kolejce)
+    local txt = (c.ai.placeholderText ~= "" and c.ai.placeholderText or "Mysle nad odpowiedzia...")
+    if #CB.queue > 0 then txt = txt .. " (w kolejce za mna: " .. #CB.queue .. ")" end
+    notice(ctx, q, txt)
+    CB.current = { player = q.player, hidden = q.hidden, started = U.now(), lastPing = U.now() }
+    local ok, res, err = pcall(askAI, ctx, q)
+    CB.current = nil
+    if not ok then res, err = nil, res end
     if res then
       answer = res
     else
@@ -225,7 +407,12 @@ function CB.worker(ctx)
       CB.busy = true
       local ok, err = pcall(CB.handle, ctx, q)
       CB.busy = false
-      if not ok then ctx.auto.logEvent("Chatbot: " .. tostring(err), "warn") end
+      CB.current = nil
+      if not ok then
+        ctx.auto.logEvent("Chatbot: " .. tostring(err), "warn")
+        -- uzytkownik nigdy nie zostaje bez odpowiedzi
+        pcall(reply, ctx, q, "Blad bota: " .. tostring(err))
+      end
     end
   end
 end

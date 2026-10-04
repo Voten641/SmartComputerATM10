@@ -1044,6 +1044,11 @@ function G.new(ctx, opts)
             set = function(v) ai.think = not v; changed() end,
           },
           cfgRow("text", "Wlasny prompt (puste=domyslny)", ai, "prompt"),
+          cfgRow("choice", "Info 'mysle...'", ai, "placeholder", {
+            labels = { chat = "na czacie", toast = "toast (powiadomienie)", off = "wylaczone" },
+            choices = function() return { "chat", "toast", "off" } end }),
+          cfgRow("text", "  tekst", ai, "placeholderText"),
+          cfgRow("number", "  'nadal mysle' co (s, 0=wyl)", ai, "progressEvery", { min = 0, max = 120, step = 5 }),
           { type = "action", label = "Wyczysc pamiec rozmow", run = function() CBL.history = {}; flash("Wyczyszczono") end },
         }
         -- ostatni blad polaczenia (oryginalny tekst z CC) zaraz pod adresem

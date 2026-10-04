@@ -236,6 +236,16 @@ local function flushChat(cfg)
   if #boxes == 0 then A.chatQueue = {} return end
   local item = A.chatQueue[1]
   local text, opts
+  if type(item) == "table" and item.toast then
+    -- toast (powiadomienie na ekranie gracza) – wymaga gracza, dzieli cooldown z czatem
+    local ok, res, err = pcall(boxes[1].p.sendToast, {
+      title = item.title or "Smart", message = item.text, player = item.player,
+      prefix = item.prefix or "Smart", utf8 = item.utf8 or nil,
+    })
+    if ok and res then table.remove(A.chatQueue, 1)
+    elseif not ok or (err and not tostring(err):find("ooldown")) then table.remove(A.chatQueue, 1) end
+    return
+  end
   if type(item) == "table" then
     text = item.text
     opts = { prefix = item.prefix or "Smart", utf8 = item.utf8 or nil }

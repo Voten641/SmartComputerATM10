@@ -136,7 +136,10 @@ Opcje: słowo wyzwalające, podpis odpowiedzi, „zawsze prywatnie”, lista gra
 1. W menu: **AI włączone**, **Adres serwera** (np. `http://192.168.1.50:11434`), potem
    **Pobierz listę modeli / test połączenia** i wybierz **Model** (albo wpisz ręcznie).
 2. Bot dołącza do pytania aktualne dane bazy (można wyłączyć), pamięta kilka ostatnich wymian z każdym graczem
-   i odpowiada krótko po polsku. Długie odpowiedzi dzieli na kilka wiadomości (Chat Box ma 1 s przerwy między nimi).
+   i odpowiada krótko po polsku. **Magazyn ME/RS**: model sam przeszukuje przedmioty, płyny i chemikalia
+   narzędziem (tool calling) – np. „smart ile mam diamentów?” → szuka „diamond” (nazwy w AE2/RS są po angielsku)
+   i podaje dokładną liczbę. Modele bez obsługi narzędzi dostają w kontekście pasujące pozycje i najliczniejsze
+   przedmioty. Do pytań o magazyn najlepiej model z narzędziami (np. qwen3, llama3.1+). Długie odpowiedzi dzieli na kilka wiadomości (Chat Box ma 1 s przerwy między nimi).
 3. **CC: Tweaked domyślnie blokuje adresy lokalne** (localhost, 192.168.x.x – reguła `$private`).
    W pliku `computercraft-server.toml` (config serwera, w świecie w `serverconfig/`) dodaj regułę
    **nad** regułą `$private` (pierwsza pasująca reguła wygrywa):
@@ -148,7 +151,11 @@ Opcje: słowo wyzwalające, podpis odpowiedzi, „zawsze prywatnie”, lista gra
    ```
 
    i zrestartuj serwer. Jeśli Ollama działa na innym komputerze niż serwer, uruchom ją z `OLLAMA_HOST=0.0.0.0`.
-4. Odpowiedź jest strumieniowana, więc nawet wolny model nie przekroczy limitu czasu CC (60 s bez danych).
+4. Po pytaniu do AI pytający od razu dostaje **toast** (powiadomienie na ekranie, bez spamu na czacie)
+   „Myślę nad odpowiedzią…”, przy długim generowaniu co 20 s „Nadal myślę… (40 s)” z informacją o kolejce.
+   Gdy coś pójdzie nie tak, zawsze przychodzi odpowiedź z błędem. Tryb (toast / czat / wyłączone), tekst i
+   częstotliwość ustawisz w menu.
+5. Odpowiedź jest strumieniowana, więc nawet wolny model nie przekroczy limitu czasu CC (60 s bez danych).
    „Wyłącz myślenie” przyspiesza modele rozumujące (np. qwen3), a bloki `<think>` nigdy nie trafiają na czat.
 
 ## Autocrafting

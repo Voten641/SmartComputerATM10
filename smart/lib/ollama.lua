@@ -86,45 +86,87 @@ local function request(base, body)
   })
 end
 
--- rozmowa: messages = { {role, content}, ... }; zwraca tekst odpowiedzi albo nil, blad
-function O.chat(c, messages)
-  local base = baseUrl(c.url)
-  if base == "" then return nil, "brak adresu serwera Ollama" end
-  if not c.model or c.model == "" then return nil, "nie wybrano modelu" end
-  local body = {
-    model = c.model,
-    messages = messages,
-    -- strumien: Ollama wysyla odpowiedz kawalkami, wiec CC nie zrywa polaczenia przy dlugim generowaniu
-    stream = true,
-    options = { num_predict = c.maxTokens or 250 },
-  }
-  if c.think == false then body.think = false end
+O.noTools = {} -- [model] = true gdy model nie obsluguje narzedzi (wtedy kontekst zamiast narzedzi)
+
+-- jedno zapytanie /api/chat (strumien); zwraca tresc, wywolania narzedzi albo nil, blad
+local function chatOnce(base, body)
   local resp, err, failResp = request(base, body)
   if not resp then
     local e = readError(failResp)
-    -- starsze wersje/modele bez obslugi "think": ponawiamy bez tego pola
-    if e and e:lower():find("think") and body.think ~= nil then
-      body.think = nil
-      resp, err, failResp = request(base, body)
-      if not resp then return nil, readError(failResp) or O.explain(err) end
-    else
-      return nil, e or O.explain(err)
+    if e then
+      local low = e:lower()
+      -- starsze wersje/modele bez obslugi "think": ponawiamy bez tego pola
+      if low:find("think") and body.think ~= nil then
+        body.think = nil
+        return chatOnce(base, body)
+      end
+      -- model bez narzedzi: ponawiamy bez nich (wywolujacy dostanie informacje przez O.noTools)
+      if low:find("tool") and body.tools then
+        O.noTools[body.model] = true
+        body.tools = nil
+        return chatOnce(base, body)
+      end
+      return nil, e
     end
+    return nil, O.explain(err)
   end
   local raw = resp.readAll()
   resp.close()
-  -- NDJSON: kazda linia to obiekt { message = { content }, done }
-  local parts = {}
+  -- NDJSON: kazda linia to { message = { content, tool_calls }, done }
+  local parts, calls = {}, {}
   for line in raw:gmatch("[^\n]+") do
     local obj = textutils.unserialiseJSON(line)
     if type(obj) == "table" then
       if obj.error then return nil, tostring(obj.error) end
-      if type(obj.message) == "table" and obj.message.content then parts[#parts + 1] = obj.message.content end
+      local m = obj.message
+      if type(m) == "table" then
+        if m.content then parts[#parts + 1] = m.content end
+        if type(m.tool_calls) == "table" then
+          for _, tc in ipairs(m.tool_calls) do calls[#calls + 1] = tc end
+        end
+      end
     end
   end
-  local text = O.clean(table.concat(parts))
-  if text == "" then return nil, "pusta odpowiedz modelu" end
-  return text
+  return table.concat(parts), calls
+end
+
+-- rozmowa: messages = { {role, content}, ... }
+-- tools (opcjonalnie) = definicje narzedzi Ollamy, onTool(name, args) -> tekst wyniku
+-- zwraca tekst odpowiedzi albo nil, blad
+function O.chat(c, messages, tools, onTool)
+  local base = baseUrl(c.url)
+  if base == "" then return nil, "brak adresu serwera Ollama" end
+  if not c.model or c.model == "" then return nil, "nie wybrano modelu" end
+  local msgs = {}
+  for i, m in ipairs(messages) do msgs[i] = m end
+  for _ = 1, 5 do -- maks. 5 rund narzedzi na pytanie
+    local body = {
+      model = c.model,
+      messages = msgs,
+      -- strumien: Ollama wysyla odpowiedz kawalkami, wiec CC nie zrywa polaczenia przy dlugim generowaniu
+      stream = true,
+      options = { num_predict = c.maxTokens or 250 },
+    }
+    if c.think == false then body.think = false end
+    if tools and onTool and not O.noTools[c.model] then body.tools = tools end
+    local content, calls = chatOnce(base, body)
+    if not content then return nil, calls end
+    if #calls == 0 or not onTool then
+      local text = O.clean(content)
+      if text == "" then return nil, "pusta odpowiedz modelu" end
+      return text
+    end
+    -- model chce uzyc narzedzi: wykonujemy je i odsylamy wyniki
+    msgs[#msgs + 1] = { role = "assistant", content = content, tool_calls = calls }
+    for _, tc in ipairs(calls) do
+      local fn = type(tc["function"]) == "table" and tc["function"] or {}
+      local name = tostring(fn.name or "")
+      local args = type(fn.arguments) == "table" and fn.arguments or {}
+      local ok, res = pcall(onTool, name, args)
+      msgs[#msgs + 1] = { role = "tool", tool_name = name, content = ok and tostring(res) or ("blad: " .. tostring(res)) }
+    end
+  end
+  return nil, "model wywolal za duzo narzedzi"
 end
 
 return O
