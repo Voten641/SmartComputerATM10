@@ -123,6 +123,11 @@ Na brak połączenia zwraca `nil, "NOT_CONNECTED"`.
 - AP crafting: `craftItem(filter[, cpuName])` – filtr `{name=, count=}`, zwraca obiekt joba lub `nil, "NOT_CRAFTABLE"`;
   `isCrafting(filter[, cpu])` – filtr generyczny: `{type="item", name=}` (bez `type` rozpoznaje po rejestrze);
   `getItem({name=})` → stos lub `nil, err` (pusty filtr = `EMPTY_FILTER`).
+- AP `getPatterns({ output = { name } })`: AE2 `{ primaryOutput, outputs, inputs = { { primaryInput, multiplier,
+  remaining, possibleInputs } }, patternType = crafting|processing|smithing|stonecutting }` (ilosc wejscia =
+  `primaryInput.count * multiplier`; `possibleInputs` to Java Stream – nie polegac). RS: `inputs` = lista list
+  alternatyw `{ name, count }`, `patternType` = typ ukladu RS (CRAFTING/PROCESSING...), `id`.
+  Brak API receptur gry i brak symulacji craftingu (craftItem od razu zleca prace). `getCraftableItems({})`.
 - AP `exportItem(target, filter)` – target: nazwa peryferium w sieci CC (`minecraft:chest_0`) albo `@up/@north/...`;
   zwraca liczbe przeniesionych sztuk lub `nil, "INVENTORY_NOT_FOUND"`. Domyslnie 64 szt. (pole `count`).
 - Create: `Create_RotationSpeedController.setTargetSpeed(int)` – zakres `±maxRotationSpeed` (domyslnie 256), clamp w grze.

@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.3.2",
+  version = "1.3.3",
   files = {
     "install.lua",
     "update.lua",
@@ -9,6 +9,7 @@ return {
     "smart/lib/auto.lua",
     "smart/lib/chatbot.lua",
     "smart/lib/config.lua",
+    "smart/lib/craftplan.lua",
     "smart/lib/devices.lua",
     "smart/lib/displays.lua",
     "smart/lib/gfx.lua",
@@ -55,9 +56,7 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "AI widzi magazyn ME/RS: narzedzie szukaj_w_magazynie (przedmioty, plyny, chemikalia, dokladne ilosci)",
-    "Modele bez narzedzi: pasujace pozycje i top magazynu w kontekscie",
-    "Chatbot AI: toast 'Mysle nad odpowiedzia...' zaraz po pytaniu, 'Nadal mysle' co 20 s z kolejka",
-    "Zawsze odpowiedz przy bledzie bota/modelu",
+    "AI planuje crafting ze wzorow ME/RS: czego brakuje, rekurencyjnie skladniki, co wymaga maszyny (processing), co bez wzoru",
+    "Komenda bez AI: smart craft <nazwa> [ilosc]",
   },
 }

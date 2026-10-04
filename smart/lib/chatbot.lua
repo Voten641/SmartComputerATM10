@@ -5,6 +5,7 @@
 local U = require("lib.util")
 local D = require("lib.devices")
 local O = require("lib.ollama")
+local CP = require("lib.craftplan")
 
 local CB = {}
 CB.queue = {}      -- pytania czekajace na obsluge
@@ -184,7 +185,36 @@ CB.TOOLS = {
   },
 }
 
+CB.TOOLS[#CB.TOOLS + 1] = {
+  type = "function",
+  ["function"] = {
+    name = "sprawdz_crafting",
+    description = "Sprawdza, czy da sie zrobic przedmiot z tego, co jest w magazynie ME/RS, na podstawie WZOROW "
+      .. "(patterns) w systemie. Rekurencyjnie sprawdza brakujace skladniki i ich wzory. Zwraca drzewo: czego "
+      .. "brakuje, co ma wzor, co wymaga maszyny (wzor processing) i czego nie da sie zrobic (brak wzoru). "
+      .. "Nazwa PO ANGIELSKU (np. 'logic processor') albo id (np. 'ae2:logic_processor').",
+    parameters = {
+      type = "object",
+      properties = {
+        nazwa = { type = "string", description = "angielska nazwa przedmiotu albo jego id" },
+        ilosc = { type = "number", description = "ile sztuk (domyslnie 1)" },
+      },
+      required = { "nazwa" },
+    },
+  },
+}
+
 function CB.runTool(name, args)
+  if name == "sprawdz_crafting" then
+    if #D.byKind({ "me", "rs" }) == 0 then return "Brak ME/RS Bridge podlaczonego do systemu." end
+    local id = CP.resolve(args.nazwa)
+    if not id then
+      return "Nie znaleziono przedmiotu '" .. tostring(args.nazwa) .. "' w magazynie ani wsrod rzeczy do scraftowania. "
+        .. "Nie ma tez dla niego wzoru w ME/RS - przepis mozesz podac z wlasnej wiedzy, zaznaczajac, ze nie jest pewny."
+    end
+    local root, summary = CP.plan(id, math.max(1, math.floor(tonumber(args.ilosc) or 1)))
+    return CP.describe(root, summary, 40)
+  end
   if #D.byKind({ "me", "rs" }) == 0 then return "Brak ME/RS Bridge podlaczonego do systemu." end
   if name == "szukaj_w_magazynie" then
     local found, total = CB.searchStock(args.fraza, 15)
@@ -226,7 +256,7 @@ local COMMANDS = {}
 
 COMMANDS.pomoc = function(ctx, trig)
   local ai = ctx.cfg.chatbot.ai
-  local t = trig .. " status | " .. trig .. " reaktor | " .. trig .. " alarmy | " .. trig .. " pomoc"
+  local t = trig .. " status | " .. trig .. " reaktor | " .. trig .. " alarmy | " .. trig .. " craft <nazwa> [ilosc] | " .. trig .. " pomoc"
   if ai.enabled then t = t .. " | albo zadaj dowolne pytanie (AI: " .. tostring(ai.model) .. ")" end
   return "Komendy: " .. t .. ". Dodaj $ na poczatku, zeby nikt nie widzial pytania."
 end
@@ -242,6 +272,19 @@ COMMANDS.reaktor = function(ctx)
   return table.concat(r, " | ")
 end
 COMMANDS.reaktory = COMMANDS.reaktor
+
+-- "smart craft logic processor 16" – plan craftingu z wzorow ME/RS (bez AI)
+COMMANDS.craft = function(ctx, trig, arg)
+  if not arg or arg == "" then return "Uzycie: " .. trig .. " craft <nazwa po angielsku albo id> [ilosc]" end
+  if #D.byKind({ "me", "rs" }) == 0 then return "Brak ME/RS Bridge." end
+  local name, n = arg:match("^(.-)%s+(%d+)$")
+  if not name then name, n = arg, 1 end
+  local id = CP.resolve(name)
+  if not id then return "Nie znam '" .. name .. "' - nie ma go w magazynie ani wzorach (podaj angielska nazwe albo id)." end
+  local root, summary = CP.plan(id, math.max(1, tonumber(n) or 1))
+  return CP.short(root, summary)
+end
+COMMANDS.crafting = COMMANDS.craft
 
 COMMANDS.alarmy = function(ctx)
   local al = ctx.auto.list()
@@ -333,6 +376,10 @@ local function askAI(ctx, q)
   if useTools then
     sys = sys .. "\nO zawartosc magazynu (przedmioty, plyny, ilosci) pytaj narzedziem szukaj_w_magazynie - "
       .. "nie zgaduj. Nazwy w magazynie sa po angielsku."
+      .. "\nGdy gracz pyta jak cos zrobic / czy moze cos scraftowac, uzyj sprawdz_crafting. Wyjasnij czego brakuje, "
+      .. "co system zrobi sam ze wzorow, co wymaga maszyny (wzor processing) i czego brakuje bez wzoru. "
+      .. "Dla rzeczy BEZ wzoru mozesz podac przepis z wlasnej wiedzy o modach ATM10, ale zawsze zaznacz, "
+      .. "ze to nie jest sprawdzone w grze (niech gracz potwierdzi w JEI)."
   else
     local sc = stockContext(q.text)
     if sc then sys = sys .. "\n" .. sc end
@@ -366,6 +413,8 @@ function CB.handle(ctx, q)
   local answer
   if cmd == "" then
     answer = COMMANDS.pomoc(ctx, c.trigger)
+  elseif (cmd == "craft" or cmd == "crafting") and not c.ai.enabled then
+    answer = COMMANDS[cmd](ctx, c.trigger, arg)
   elseif COMMANDS[cmd] and arg == "" then
     answer = COMMANDS[cmd](ctx, c.trigger)
   elseif c.ai.enabled then

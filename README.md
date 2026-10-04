@@ -126,6 +126,7 @@ Na czacie piszesz wiadomość zaczynającą się od słowa wyzwalającego (domy�
 | `smart status` | energia, reaktory, generacja, ME/RS, gracze, alarmy |
 | `smart reaktor` | stan reaktorów fission |
 | `smart alarmy` | aktywne alarmy |
+| `smart craft <nazwa> [ilość]` | plan craftingu z wzorów ME/RS (bez AI; z AI pytaj normalnie, np. „jak zrobić 2 machine frame?”) |
 | `smart <dowolne pytanie>` | odpowiedź AI z Ollamy (gdy włączona) |
 | `$smart ...` | to samo, ale pytanie jest ukryte, a odpowiedź przychodzi tylko do ciebie |
 
@@ -157,6 +158,17 @@ Opcje: słowo wyzwalające, podpis odpowiedzi, „zawsze prywatnie”, lista gra
    częstotliwość ustawisz w menu.
 5. Odpowiedź jest strumieniowana, więc nawet wolny model nie przekroczy limitu czasu CC (60 s bez danych).
    „Wyłącz myślenie” przyspiesza modele rozumujące (np. qwen3), a bloki `<think>` nigdy nie trafiają na czat.
+
+### Planowanie craftingu (AI)
+
+„smart jak zrobić 16 logic processor?” – AI sprawdza **wzory (patterns) w ME/RS**: ile sztuk trzeba, czego
+brakuje w magazynie, a dla brakujących składników rekurencyjnie szuka ich wzorów (Y i Z → z czego zrobić Y i Z…).
+Odpowiedź mówi: co system zrobi sam, co wymaga **maszyny** (wzór *processing*) i czego brakuje **bez wzoru**.
+
+Ograniczenia (Advanced Peripherals 0.8): komputer nie ma dostępu do receptur gry (JEI) ani do symulacji
+craftingu – widzi tylko wzory zapisane w twoim systemie. Dla przedmiotów bez wzoru AI może podać przepis
+z własnej wiedzy, ale zawsze oznacza go jako niesprawdzony. Wzór nie mówi też, *jaka* to maszyna – AI zgaduje
+po składnikach. Dla wzorów z wieloma wariantami składnika (tagi) AE2 bierzemy pierwszy wariant.
 
 ## Autocrafting
 

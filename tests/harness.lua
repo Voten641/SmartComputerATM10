@@ -530,10 +530,33 @@ local items = {}
 crafts, exports = {}, {}
 for i = 1, 40 do items[i] = { name = "minecraft:item_" .. i, displayName = "Przedmiot " .. i, count = i * 37, isCraftable = i % 5 == 0 } end
 items[#items + 1] = { name = "minecraft:diamond", displayName = "Diamond", count = 1234, isCraftable = false }
+items[#items + 1] = { name = "minecraft:iron_ingot", displayName = "Iron Ingot", count = 2, isCraftable = false }
+items[#items + 1] = { name = "minecraft:redstone", displayName = "Redstone", count = 1, isCraftable = false }
+-- wzory w formacie AE2 (AEApi.parsePattern): Machine Frame (crafting) -> Basic Circuit (processing)
+local function st(name, count) return { name = name, count = count } end
+local PATTERNS = {
+  ["test:machine_frame"] = { {
+    primaryOutput = st("test:machine_frame", 1), outputs = { st("test:machine_frame", 1) }, patternType = "crafting",
+    inputs = { { primaryInput = st("minecraft:iron_ingot", 1), multiplier = 4 }, { primaryInput = st("test:circuit", 1), multiplier = 1 } },
+  } },
+  ["test:circuit"] = { {
+    primaryOutput = st("test:circuit", 1), outputs = { st("test:circuit", 1) }, patternType = "processing",
+    inputs = { { primaryInput = st("minecraft:redstone", 2), multiplier = 1 }, { primaryInput = st("minecraft:gold_ingot", 1), multiplier = 1 } },
+  } },
+}
 add("me_bridge_0", { "me_bridge" }, {
   isConnected = function() return true end, isOnline = function() return true end,
   getItems = function(f) assert(type(f) == "table") return items end,
   getFluids = function(f) assert(type(f) == "table") return { { name = "minecraft:water", displayName = "Water", count = 500000 } } end,
+  getCraftableItems = function(f)
+    assert(type(f) == "table")
+    return { { name = "test:machine_frame", displayName = "Machine Frame", count = 0, isCraftable = true },
+             { name = "test:circuit", displayName = "Basic Circuit", count = 0, isCraftable = true } }
+  end,
+  getPatterns = function(f)
+    assert(type(f) == "table" and type(f.output) == "table" and f.output.name, "getPatterns: filtr { output = { name } }")
+    return PATTERNS[f.output.name] or {}
+  end,
   getUsedItemStorage = function() return 97000 end, getMaxItemStorage = function() return 100000 end,
   getUsedFluidStorage = function() return 10 end, getMaxFluidStorage = function() return 100 end,
   getStoredEnergy = function() return 1000 end, getEnergyCapacity = function() return 1600 end,
@@ -684,6 +707,13 @@ http = {
     -- model bez narzedzi: blad jak w prawdziwej Ollamie (HTTP 400)
     if req.tools and q:find("bez narzedzi") then
       return nil, "Bad Request", resp('{"error":"registry.ollama.ai/library/qwen3 does not support tools"}', 400)
+    end
+    if last.role == "tool" and last.tool_name == "sprawdz_crafting" then
+      local miss = q:match("NIE MA wzoru[^:]*: ([^\n]+)")
+      return stream("Plan gotowy. Brakuje: " .. tostring(miss))
+    end
+    if req.tools and q:find("zrobic") then
+      return stream("", '[{"function":{"name":"sprawdz_crafting","arguments":{"nazwa":"machine frame","ilosc":2}}}]')
     end
     -- wynik narzedzia -> odpowiedz na jego podstawie
     if last.role == "tool" then
@@ -1059,6 +1089,7 @@ at(6, function()
 end)
 -- AI a magazyn ME/RS: narzedzie szukaj_w_magazynie, potem model bez narzedzi (kontekst)
 at(9, function() os.queueEvent("chat", "uuid-2", "Steve", "smart ile mam diamentow?", false, "smart ile mam diamentow?") end)
+at(10, function() os.queueEvent("chat", "uuid-4", "Alex", "smart jak zrobic 2 machine frame?", false, "smart jak zrobic 2 machine frame?") end)
 at(22, function() os.queueEvent("chat", "uuid-2", "Steve", "smart bez narzedzi: ile mam diamond", false, "smart bez narzedzi: ile mam diamond") end)
 -- placeholder: wolny model (pingi "nadal mysle"), kolejka, awaria
 at(7, function()
@@ -1168,15 +1199,36 @@ check(toastsFor("Steve", "Mysle nad odpowiedzia") == 4, "placeholder: brak toast
 local toolReq
 for _, r in ipairs(ollamaRequests) do
   local l = r.messages[#r.messages]
-  if l.role == "tool" then toolReq = r end
+  if l.role == "tool" and l.tool_name == "szukaj_w_magazynie" then toolReq = r end
 end
 check(toolReq and toolReq.messages[#toolReq.messages].tool_name == "szukaj_w_magazynie", "magazyn: brak wyniku narzedzia szukaj_w_magazynie")
 check(toolReq and toolReq.messages[#toolReq.messages - 1].role == "assistant" and toolReq.messages[#toolReq.messages - 1].tool_calls,
   "magazyn: brak wiadomosci asystenta z tool_calls przed wynikiem")
-check(toolReq and toolReq.tools and #toolReq.tools == 2, "magazyn: brak definicji narzedzi w zapytaniu")
+local toolNames = {}
+for _, t in ipairs(toolReq and toolReq.tools or {}) do toolNames[#toolNames + 1] = t["function"].name end
+check(table.concat(toolNames, ",") == "szukaj_w_magazynie,najwiecej_w_magazynie,sprawdz_crafting",
+  "magazyn: definicje narzedzi w zapytaniu: " .. table.concat(toolNames, ","))
 check(chatIndex("Masz 1234 diamentow w magazynie.") ~= nil, "magazyn: AI nie podala liczby diamentow z ME")
 check(chatIndex("Z kontekstu: 1234 diamentow.") ~= nil, "magazyn: model bez narzedzi nie dostal magazynu w kontekscie")
-check(toastsFor("Alex", "Mysle nad odpowiedzia") == 1, "placeholder: brak toastu 'mysle' dla Alexa")
+-- planer craftingu (wzory ME/RS)
+local CP = require("lib.craftplan")
+local cid = CP.resolve("machine frame")
+check(cid == "test:machine_frame", "crafting: nie rozpoznano 'machine frame' (" .. tostring(cid) .. ")")
+check(CP.resolve("ae2:cos_tam") == "ae2:cos_tam", "crafting: id z dwukropkiem powinno przejsc bez zmian")
+local root, sum = CP.plan("test:machine_frame", 2)
+check(root.missing == 2 and root.pattern == "crafting" and root.runs == 2, "crafting: zly wezel glowny")
+check(sum.raw["minecraft:iron_ingot"] == 6, "crafting: zelaza brakuje 6 (8 potrzeba, 2 jest): " .. tostring(sum.raw["minecraft:iron_ingot"]))
+check(sum.raw["minecraft:redstone"] == 3, "crafting: redstone brakuje 3 (4 potrzeba, 1 jest): " .. tostring(sum.raw["minecraft:redstone"]))
+check(sum.raw["minecraft:gold_ingot"] == 2, "crafting: zlota brakuje 2 (brak w magazynie i brak wzoru)")
+check(#sum.machines == 1 and sum.machines[1] == "Basic Circuit", "crafting: Basic Circuit wymaga maszyny (processing)")
+local desc = CP.describe(root, sum)
+if os.getenv("SMART_PLAN") then io.stdout:write("\n", desc, "\n\n[czat bez AI] ", CP.short(root, sum), "\n") end
+check(desc:find("(MASZYNA)", 1, true) and desc:find("BRAK WZORU", 1, true), "crafting: opis bez oznaczen maszyny/braku wzoru")
+local short = CP.short(root, sum)
+check(short:find("Iron Ingot x6", 1, true) and short:find("Maszyny (processing): Basic Circuit", 1, true), "crafting: krotkie podsumowanie: " .. short)
+-- AI uzyla narzedzia sprawdz_crafting i przekazala braki
+check(chatIndex("Plan gotowy. Brakuje:") and chatIndex("Iron Ingot x6"), "crafting AI: brak odpowiedzi z planem")
+check(toastsFor("Alex", "Mysle nad odpowiedzia") == 2, "placeholder: brak toastu 'mysle' dla Alexa")
 check(toastsFor("Voten641", "Mysle nad odpowiedzia") == 1, "placeholder: toast 'mysle' tylko dla pytania do AI (nie dla komend)")
 check(toastsFor("Alex", "Nadal mysle... (5 s)") == 1 and toastsFor("Alex", "Nadal mysle... (10 s)") == 1,
   "placeholder: brak pingow 'nadal mysle' przy wolnym modelu")
