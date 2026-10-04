@@ -1014,6 +1014,7 @@ function G.new(ctx, opts)
           { type = "header", label = "AI - serwer Ollama" },
           cfgRow("toggle", "AI wlaczone", ai, "enabled"),
           cfgRow("text", "Adres serwera", ai, "url"),
+          { type = "info", label = "Laczy z", value = O.baseUrl(ai.url) .. "/api" },
           {
             type = "choice", label = "Model",
             choices = function() return #choices > 0 and choices or { "" } end,
@@ -1030,6 +1031,7 @@ function G.new(ctx, opts)
                 if ai.model == "" and list[1] then ai.model = list[1]; changed() end
               else
                 flash("Ollama: " .. tostring(err), colors.red)
+                A.logEvent("Ollama (" .. O.baseUrl(ai.url) .. "): " .. tostring(err), "warn")
               end
             end },
           cfgRow("number", "Maks. dlugosc (tokeny)", ai, "maxTokens", { min = 20, max = 2000, step = 50 }),
@@ -1044,6 +1046,15 @@ function G.new(ctx, opts)
           cfgRow("text", "Wlasny prompt (puste=domyslny)", ai, "prompt"),
           { type = "action", label = "Wyczysc pamiec rozmow", run = function() CBL.history = {}; flash("Wyczyszczono") end },
         }
+        -- ostatni blad polaczenia (oryginalny tekst z CC) zaraz pod adresem
+        if O.lastError then
+          for i, r in ipairs(rows) do
+            if r.label == "Laczy z" then
+              table.insert(rows, i + 1, { type = "info", label = "Blad CC", value = O.lastError, color = colors.red })
+              break
+            end
+          end
+        end
         if CBL.last then
           rows[#rows + 1] = { type = "header", label = "Ostatnio" }
           rows[#rows + 1] = { type = "info", label = CBL.last.player .. ": " .. CBL.last.q }

@@ -1,6 +1,6 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.3.0",
+  version = "1.3.1",
   files = {
     "install.lua",
     "update.lua",
@@ -55,9 +55,7 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Chatbot na czacie (Chat Box): smart status / reaktor / alarmy / pomoc, $smart = prywatnie",
-    "AI przez serwer Ollama: pytania o baze z aktualnymi danymi, pamiec rozmowy, strumieniowanie",
-    "Menu > Czat i AI (Ollama): adres, model (lista z serwera), test polaczenia",
-    "update nic nie pobiera, gdy masz najnowsza wersje; update force",
+    "Ollama: oryginalny blad CC + podpowiedz w menu i dzienniku",
+    "Menu Czat i AI: wiersz 'Laczy z' i 'Blad CC'",
   },
 }

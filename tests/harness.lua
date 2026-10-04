@@ -1113,6 +1113,13 @@ local parts = 0
 for _, m in ipairs(chatMsgs) do if m:find("Bardzo dluga odpowiedz", 1, true) then parts = parts + 1; check(#m <= 240, "chatbot: czesc odpowiedzi > 240 znakow") end end
 check(parts >= 3, "chatbot: dluga odpowiedz nie zostala podzielona (" .. parts .. ")")
 check(chatIndex("Komendy: smart status") ~= nil, "chatbot: samo 'smart' powinno pokazac pomoc")
+-- diagnostyka polaczenia z Ollama: podpowiedz + oryginalny komunikat CC
+local O = require("lib.ollama")
+local l1, e1 = O.listModels("http://10.0.1.12:11434")
+check(l1 == nil and e1:find("NAD $private", 1, true) and e1:find("[Domain not permitted]", 1, true), "ollama: zla diagnoza blokady CC: " .. tostring(e1))
+check(O.lastError == "Domain not permitted", "ollama: brak oryginalnego bledu CC")
+local l2 = O.listModels("ollama.test:11434")
+check(l2 and #l2 == 2 and O.lastError == nil, "ollama: lista modeli / czyszczenie bledu")
 
 ---------------------------------------------------------------------------
 -- Faza 2: pilot na Pocket Computerze

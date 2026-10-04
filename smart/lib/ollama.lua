@@ -17,19 +17,27 @@ local function json(t)
   return textutils.serialiseJSON(t, { unicode_strings = true })
 end
 
--- komunikat bledu HTTP po ludzku (najczestszy problem: regula $private w configu CC)
+O.lastError = nil -- ostatni blad (oryginalny komunikat CC/Ollamy) – widoczny w menu
+
+-- komunikat bledu HTTP po ludzku + oryginalny tekst z CC (komunikaty: NetworkUtils CC:T)
 function O.explain(err)
   err = tostring(err or "")
-  if err:find("not permitted") or err:find("Domain not permitted") then
-    return "CC blokuje ten adres - dodaj regule allow w configu CC (README)"
+  local hint
+  if err:find("Domain not permitted", 1, true) then
+    hint = "CC blokuje adres: regula allow musi byc NAD $private, restart serwera"
+  elseif err:find("refused", 1, true) then
+    hint = "Ollama nie slucha pod tym adresem (OLLAMA_HOST=0.0.0.0, port 11434, firewall)"
+  elseif err:find("Could not connect", 1, true) or err:find("connect", 1, true) then
+    hint = "brak polaczenia (adres/port, firewall, OLLAMA_HOST=0.0.0.0)"
+  elseif err:find("Timed out", 1, true) then
+    hint = "przekroczono czas (zly adres/firewall albo model za wolny)"
+  elseif err:find("Unknown host", 1, true) then
+    hint = "nieznany host - sprawdz adres"
+  elseif err:find("Invalid protocol", 1, true) then
+    hint = "adres musi zaczynac sie od http://"
   end
-  if err:find("Could not connect") or err:find("Connection refused") or err:find("connect") then
-    return "brak polaczenia z Ollama (adres/port, OLLAMA_HOST=0.0.0.0?)"
-  end
-  if err:find("Timed out") or err:find("timed out") then
-    return "przekroczono czas odpowiedzi (model za wolny?)"
-  end
-  return err
+  O.lastError = err
+  return hint and (hint .. " [" .. err .. "]") or err
 end
 
 local function readError(resp)
@@ -49,6 +57,7 @@ function O.listModels(url)
   if base == "" then return nil, "brak adresu serwera" end
   local resp, err, failResp = http.get({ url = base .. "/api/tags", timeout = 8 })
   if not resp then return nil, readError(failResp) or O.explain(err) end
+  O.lastError = nil
   local body = resp.readAll()
   resp.close()
   local obj = textutils.unserialiseJSON(body)
