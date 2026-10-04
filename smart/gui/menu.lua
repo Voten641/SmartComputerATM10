@@ -986,6 +986,77 @@ function G.new(ctx, opts)
     }
   end
 
+  ---------------------------------------------------------------------------
+  -- Czat i AI (Ollama)
+  ---------------------------------------------------------------------------
+  function Screens.chatbot()
+    local cb = ctx.cfg.chatbot
+    local ai = cb.ai
+    local CBL = require("lib.chatbot")
+    local O = require("lib.ollama")
+    return {
+      title = "Czat i AI (Ollama)",
+      rows = function()
+        local boxes = D.byKind("chat")
+        local models = O.models or {}
+        local choices = {}
+        if ai.model ~= "" then choices[1] = ai.model end
+        for _, m in ipairs(models) do if m ~= ai.model then choices[#choices + 1] = m end end
+        local rows = {
+          { type = "info", label = "Chat Box", value = #boxes > 0 and boxes[1].name or "BRAK",
+            color = #boxes > 0 and colors.lime or colors.red },
+          cfgRow("toggle", "Odpowiadaj na czacie", cb, "enabled"),
+          cfgRow("text", "Slowo wyzwalajace", cb, "trigger"),
+          cfgRow("text", "Podpis odpowiedzi", cb, "prefix"),
+          cfgRow("toggle", "Zawsze prywatnie", cb, "private"),
+          cfgRow("text", "Tylko gracze (puste=wszyscy)", cb, "allowed"),
+          { type = "info", label = "Przyklad: " .. cb.trigger .. " status / $" .. cb.trigger .. " pomoc" },
+          { type = "header", label = "AI - serwer Ollama" },
+          cfgRow("toggle", "AI wlaczone", ai, "enabled"),
+          cfgRow("text", "Adres serwera", ai, "url"),
+          {
+            type = "choice", label = "Model",
+            choices = function() return #choices > 0 and choices or { "" } end,
+            labels = { [""] = "(najpierw pobierz liste)" },
+            get = function() return ai.model end,
+            set = function(v) ai.model = v; changed() end,
+          },
+          cfgRow("text", "Model (wpisz recznie)", ai, "model"),
+          { type = "action", label = "Pobierz liste modeli / test polaczenia", bg = colors.blue,
+            run = function()
+              local list, err = O.listModels(ai.url)
+              if list then
+                flash("Polaczono: " .. #list .. " modeli", colors.lime)
+                if ai.model == "" and list[1] then ai.model = list[1]; changed() end
+              else
+                flash("Ollama: " .. tostring(err), colors.red)
+              end
+            end },
+          cfgRow("number", "Maks. dlugosc (tokeny)", ai, "maxTokens", { min = 20, max = 2000, step = 50 }),
+          cfgRow("number", "Pamiec rozmowy (wymiany)", ai, "memory", { min = 0, max = 10, step = 1 }),
+          cfgRow("toggle", "Dane bazy w pytaniu", ai, "context"),
+          {
+            type = "toggle", label = "Wylacz myslenie (szybciej)",
+            get = function() return ai.think == false end,
+            -- false = wysylamy think:false; true = nie wysylamy pola (domyslne zachowanie modelu)
+            set = function(v) ai.think = not v; changed() end,
+          },
+          cfgRow("text", "Wlasny prompt (puste=domyslny)", ai, "prompt"),
+          { type = "action", label = "Wyczysc pamiec rozmow", run = function() CBL.history = {}; flash("Wyczyszczono") end },
+        }
+        if CBL.last then
+          rows[#rows + 1] = { type = "header", label = "Ostatnio" }
+          rows[#rows + 1] = { type = "info", label = CBL.last.player .. ": " .. CBL.last.q }
+          rows[#rows + 1] = { type = "info", label = "> " .. CBL.last.a }
+        end
+        rows[#rows + 1] = { type = "header", label = "Ollama w sieci lokalnej?" }
+        rows[#rows + 1] = { type = "info", label = "CC blokuje adresy prywatne - dodaj regule" }
+        rows[#rows + 1] = { type = "info", label = "allow w computercraft-server.toml (README)" }
+        return rows
+      end,
+    }
+  end
+
   function Screens.main()
     return {
       title = "Smart System - " .. ctx.cfg.title,
@@ -1011,6 +1082,7 @@ function G.new(ctx, opts)
           { type = "action", label = "Autocrafting (ME/RS)", run = function() push(Screens.autocraft()) end },
           { type = "action", label = "Wyswietlacze Create", run = function() push(Screens.displays()) end },
           { type = "action", label = "Pilot (Pocket Computer)", run = function() push(Screens.remote()) end },
+          { type = "action", label = "Czat i AI (Ollama)", run = function() push(Screens.chatbot()) end },
           { type = "action", label = "Dziennik zdarzen", run = function() push(Screens.log()) end },
           { type = "action", label = "Ustawienia i aktualizacja", run = function() push(Screens.settings()) end },
           { type = "action", label = "Uruchom ponownie", bg = colors.orange, fg = colors.black, run = function() os.reboot() end },
@@ -1091,9 +1163,25 @@ function G.runUpdate()
   term.setTextColor(colors.white)
   term.clear()
   term.setCursorPos(1, 1)
+  local function ver()
+    if not fs.exists("/smart/version.txt") then return nil end
+    local f = fs.open("/smart/version.txt", "r")
+    local v = f.readAll()
+    f.close()
+    return v
+  end
+  local before = ver()
   local ok = shell.run("/install.lua", "update")
   print("")
-  if ok then
+  if ok and ver() == before then
+    -- nic nie pobrano (najnowsza wersja) – bez restartu; powrot po 3 s albo klawiszu
+    -- (aktualizacje mozna wywolac z pilota/monitora, wiec nie czekamy w nieskonczonosc)
+    print("Powrot do menu za 3s...")
+    local t = os.startTimer(3)
+    repeat
+      local e, id = os.pullEvent()
+    until (e == "timer" and id == t) or e == "key"
+  elseif ok then
     print("Aktualizacja zakonczona. Restart za 3s...")
     sleep(3)
     os.reboot()

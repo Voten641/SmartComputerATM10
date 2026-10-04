@@ -37,6 +37,24 @@ C.defaults = {
     enabled = false,
     pin = "",
   },
+  -- chatbot na czacie (Chat Box z Advanced Peripherals): "smart status", "$smart ..." itd.
+  chatbot = {
+    enabled = true,
+    trigger = "smart",     -- slowo na poczatku wiadomosci
+    prefix = "Smart",      -- podpis odpowiedzi na czacie
+    private = false,       -- zawsze odpowiadaj tylko pytajacemu (pytania z "$" i tak sa prywatne)
+    allowed = "",          -- gracze (po przecinku); puste = wszyscy
+    ai = {
+      enabled = false,
+      url = "http://localhost:11434",
+      model = "",
+      maxTokens = 250,
+      memory = 3,          -- ile ostatnich wymian pamietac na gracza
+      context = true,      -- dolaczaj aktualne dane bazy do pytania
+      think = false,       -- false = wylacz "myslenie" modeli rozumujacych (szybsze odpowiedzi)
+      prompt = "",         -- wlasny prompt systemowy (puste = domyslny)
+    },
+  },
   alarms = {
     chat = { enabled = false, player = "", prefix = "Smart" },
     speaker = true,

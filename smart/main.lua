@@ -11,6 +11,7 @@ local AC = require("lib.autocraft")
 local DS = require("lib.displays")
 local R = require("lib.remote")
 local TH = require("lib.theme")
+local CB = require("lib.chatbot")
 
 local MODULE_IDS = {
   "overview", "menu", "energy", "fission", "turbine", "boiler", "fusion",
@@ -272,7 +273,8 @@ local function main()
   UI.setTheme(ctx.cfg.theme)
   rebuild()
   local gui = require("gui.menu")
-  parallel.waitForAny(tickLoop, eventLoop, function() gui.run(ctx) end, function() R.loop(ctx) end)
+  parallel.waitForAny(tickLoop, eventLoop, function() gui.run(ctx) end, function() R.loop(ctx) end,
+    function() CB.listener(ctx) end, function() CB.worker(ctx) end)
 end
 
 local ok, err = pcall(main)

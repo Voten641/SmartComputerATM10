@@ -25,6 +25,8 @@ update
 ```
 
 Pobiera najnowszą wersję z GitHuba. Konfiguracja w `/smart/data/` zostaje nienaruszona.
+Jeśli masz już najnowszą wersję, nic nie jest pobierane (wersje porównywane liczbowo, np. 1.10 > 1.9).
+`update force` wymusza ponowne pobranie wszystkich plików (np. naprawa uszkodzonej instalacji).
 Można też kliknąć *Ustawienia i aktualizacja → Aktualizuj teraz z GitHub* w menu.
 
 Inne komendy instalatora: `install version`, `install repo <użytkownik/repo> [gałąź]`, `install uninstall`.
@@ -112,6 +114,43 @@ Dźwięk można wyłączyć w *Ustawieniach*.
 Generatory i maszyny Mekanism są włączane/wyłączane przez tryb redstone (WŁ = „ignoruj redstone”,
 WYŁ = „wymaga sygnału”); wymaga to publicznego trybu security maszyny.
 
+## Czat i AI (Ollama)
+
+Wymaga **Chat Boxa** (Advanced Peripherals) podłączonego do komputera. *Menu → Czat i AI (Ollama)*.
+
+Na czacie piszesz wiadomość zaczynającą się od słowa wyzwalającego (domyślnie `smart`):
+
+| Wiadomość | Odpowiedź |
+|---|---|
+| `smart` / `smart pomoc` | lista komend |
+| `smart status` | energia, reaktory, generacja, ME/RS, gracze, alarmy |
+| `smart reaktor` | stan reaktorów fission |
+| `smart alarmy` | aktywne alarmy |
+| `smart <dowolne pytanie>` | odpowiedź AI z Ollamy (gdy włączona) |
+| `$smart ...` | to samo, ale pytanie jest ukryte, a odpowiedź przychodzi tylko do ciebie |
+
+Opcje: słowo wyzwalające, podpis odpowiedzi, „zawsze prywatnie”, lista graczy, którym bot odpowiada.
+
+### Ollama
+
+1. W menu: **AI włączone**, **Adres serwera** (np. `http://192.168.1.50:11434`), potem
+   **Pobierz listę modeli / test połączenia** i wybierz **Model** (albo wpisz ręcznie).
+2. Bot dołącza do pytania aktualne dane bazy (można wyłączyć), pamięta kilka ostatnich wymian z każdym graczem
+   i odpowiada krótko po polsku. Długie odpowiedzi dzieli na kilka wiadomości (Chat Box ma 1 s przerwy między nimi).
+3. **CC: Tweaked domyślnie blokuje adresy lokalne** (localhost, 192.168.x.x – reguła `$private`).
+   W pliku `computercraft-server.toml` (config serwera, w świecie w `serverconfig/`) dodaj regułę
+   **nad** regułą `$private` (pierwsza pasująca reguła wygrywa):
+
+   ```toml
+   [[http.rules]]
+       host = "192.168.1.50"   # adres komputera z Ollama (albo "localhost", jeśli ta sama maszyna)
+       action = "allow"
+   ```
+
+   i zrestartuj serwer. Jeśli Ollama działa na innym komputerze niż serwer, uruchom ją z `OLLAMA_HOST=0.0.0.0`.
+4. Odpowiedź jest strumieniowana, więc nawet wolny model nie przekroczy limitu czasu CC (60 s bez danych).
+   „Wyłącz myślenie” przyspiesza modele rozumujące (np. qwen3), a bloki `<think>` nigdy nie trafiają na czat.
+
 ## Autocrafting
 
 *Menu → Autocrafting (ME/RS)*: dodajesz przedmioty (wyszukiwanie w magazynie albo po ID), ustawiasz ile ma być
@@ -157,4 +196,8 @@ Domyślnie SCRAM następuje przy jakimkolwiek uszkodzeniu lub temperaturze > 100
 * Test integracyjny (makieta API CC:T + fałszywe peryferia, symuluje dotyk monitorów i klikanie GUI):
   ```
   lua tests/harness.lua
+  ```
+* Test instalatora (pomijanie aktualizacji przy najnowszej wersji, `force`, porównanie wersji):
+  ```
+  lua tests/installer_test.lua
   ```

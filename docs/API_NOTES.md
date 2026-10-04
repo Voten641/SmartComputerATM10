@@ -27,6 +27,12 @@ Gdy dokumentacja i kod się różnią, **obowiązuje kod**.
 - Pliki startowe: `startup.lua` **oraz** wszystkie pliki z katalogu `startup/`.
 - Rozmiar terminala: config `term_sizes.computer` / `term_sizes.pocket_computer` (width/height, znaki) oraz
   `term_sizes.monitor` (maks. rozmiar monitora w blokach). Z Lua nie da sie go zmienic – tylko `getSize()`.
+- **HTTP**: domyslne reguly `http.rules`: `$private` = DENY (localhost, 10/8, 172.16/12, 192.168/16...), potem `*` = ALLOW.
+  Reguly sprawdzane po kolei, **pierwsza pasujaca akcja wygrywa** (`PartialOptions.merge`); `host` to domena, IP
+  albo CIDR. Plik: `computercraft-server.toml`. `http.get/post{ url, body, headers, timeout }` – timeout domyslnie
+  30 s, maks. 60 s, liczony jako brak danych (ReadTimeoutHandler). Blad: `nil, komunikat, odpowiedz`.
+- `textutils.serialiseJSON(t, { unicode_strings = true })` – stringi traktowane jako UTF-8 (od 1.106);
+  `unserialiseJSON` zamienia `\uXXXX` na UTF-8.
 - `window.getLine(y)` → `text, fg, bg` (stringi blit, od 1.84) – uzywane do wysylania klatek menu na pilota.
 - **Znaki rysujace 128–159** (sprawdzone na `term_font.png`): mozaika 2x3 subpikseli, znak = `128 + bity`,
   bity TL=1, TR=2, ML=4, MR=8, BL=16; prawy dolny subpiksel zawsze w kolorze tla (dla "zapalonego" trzeba
@@ -62,7 +68,10 @@ Na brak połączenia zwraca `nil, "NOT_CONNECTED"`.
 - Energy/Fluid/Gas Detector: `getTransferRate()`, `getTransferRateLimit()`, `setTransferRateLimit(n)`, `getMaxTransferRate()`
 - Player Detector: `getOnlinePlayers()`, `getPlayersInRange(r)`, `getPlayer(name)` (dawne getPlayerPos), `isPlayersInRange(r)`...; eventy `player_join`, `player_leave`, `player_click`, `player_death`
 - Environment Detector: `getBiome`, `getTime`, `getDimension`, `getMoon()` → `id, name`, `isRaining`, `isThunder`, `isSunny`, `isSlimeChunk`, `getRadiation()` / `getRadiationRaw()` (z Mekanism)
-- Chat Box: `sendMessage(msg, {player=, prefix=, brackets=, bracketsColor=, range=})` → `true` | `nil, err` (cooldown!); `sendToast({title, message, player, prefix})`
+- Chat Box: `sendMessage(msg, {player=, prefix=, brackets=, bracketsColor=, range=, utf8=})` → `true` | `nil, err`;
+  cooldown 1000 ms (`"... is on cooldown"`), maks. 1024 znakow (`chatBoxMessageSize`). `sendToast({title, message, player, prefix})`.
+  Event `chat`: `uuid, username, message, isHidden, utf8Message`. Wiadomosc z `$` na poczatku: AP usuwa `$`,
+  ustawia `isHidden = true` i ukrywa ja na czacie. Zasieg: `chatBoxMaxRange` (domyslnie -1 = wszedzie).
 - Powah (generyczne, dodatkowy typ): `energy_cell`, `ender_cell`, `furnator`, `magmator`, `thermo`, `solar_panel`, `uraninite_reactor`.
   Metody: **`getStoredEnergy()`** (docs błędnie `getEnergy`), `getMaxEnergy()`; reaktor: `isRunning`, `getFuel`, `getCarbon`, `getRedstone`, `getTemperature` (procenty)
 - Create (przez AP): `fluid_tank.info()`, `blaze_burner.info()`, `basin.inputTanks()/outputTanks()`

@@ -224,17 +224,36 @@ local function checkRadiation(cfg, cur)
   end
 end
 
+-- wiadomosc na czat w kolejce: tekst (alarm) albo { text, player, prefix, utf8 } (chatbot)
+function A.say(item)
+  A.chatQueue[#A.chatQueue + 1] = item
+  while #A.chatQueue > 40 do table.remove(A.chatQueue, 1) end
+end
+
 local function flushChat(cfg)
   if #A.chatQueue == 0 then return end
   local boxes = D.byKind("chat")
   if #boxes == 0 then A.chatQueue = {} return end
-  local ch = cfg.alarms.chat
-  local opts = { prefix = ch.prefix ~= "" and ch.prefix or "Smart" }
-  if ch.player and ch.player ~= "" then opts.player = ch.player end
-  -- AP ma cooldown na chat boxie: wysylamy 1 wiadomosc na tick, przy bledzie probujemy pozniej
-  local ok, res = pcall(boxes[1].p.sendMessage, A.chatQueue[1], opts)
-  if ok and res then table.remove(A.chatQueue, 1) end
-  while #A.chatQueue > 10 do table.remove(A.chatQueue) end
+  local item = A.chatQueue[1]
+  local text, opts
+  if type(item) == "table" then
+    text = item.text
+    opts = { prefix = item.prefix or "Smart", utf8 = item.utf8 or nil }
+    if item.player and item.player ~= "" then opts.player = item.player end
+  else
+    local ch = cfg.alarms.chat
+    text = item
+    opts = { prefix = ch.prefix ~= "" and ch.prefix or "Smart" }
+    if ch.player and ch.player ~= "" then opts.player = ch.player end
+  end
+  -- AP: cooldown 1 s na chat boxie -> 1 wiadomosc na tick; przy bledzie (cooldown) probujemy pozniej
+  local ok, res, err = pcall(boxes[1].p.sendMessage, text, opts)
+  if ok and res then
+    table.remove(A.chatQueue, 1)
+  elseif ok and err and err ~= "" and not tostring(err):find("ooldown") then
+    -- trwaly blad (np. za dluga wiadomosc) – nie blokujemy kolejki
+    table.remove(A.chatQueue, 1)
+  end
 end
 
 local function sound(cfg, cur)

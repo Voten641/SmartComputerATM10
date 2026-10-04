@@ -1,7 +1,8 @@
 -- Smart System ATM10 – instalator / aktualizator
 -- Uzycie:
 --   install              instalacja (lub naprawa)
---   install update       aktualizacja z GitHuba (konfiguracja zostaje)
+--   install update       aktualizacja z GitHuba (konfiguracja zostaje); nic nie robi, gdy masz najnowsza wersje
+--   install update force wymus ponowne pobranie (naprawa plikow)
 --   install repo <uzytkownik/repo> [galaz]   zmiana repozytorium
 --   install version      pokaz wersje lokalna i zdalna
 --   install uninstall    usuniecie programu (pyta o konfiguracje)
@@ -87,7 +88,23 @@ local function localVersion()
   return v and v:gsub("%s+$", "") or nil
 end
 
-local function install(isUpdate)
+-- porownanie wersji "1.10.2" vs "1.9.0" po liczbach: -1 (a<b), 0 (rowne), 1 (a>b)
+local function compareVersions(a, b)
+  local pa, pb = {}, {}
+  for n in tostring(a):gmatch("%d+") do pa[#pa + 1] = tonumber(n) end
+  for n in tostring(b):gmatch("%d+") do pb[#pb + 1] = tonumber(n) end
+  if #pa == 0 or #pb == 0 then
+    if a == b then return 0 end
+    return tostring(a) < tostring(b) and -1 or 1
+  end
+  for i = 1, math.max(#pa, #pb) do
+    local x, y = pa[i] or 0, pb[i] or 0
+    if x ~= y then return x < y and -1 or 1 end
+  end
+  return 0
+end
+
+local function install(isUpdate, force)
   if not http then
     say(colors.red, "HTTP API jest wylaczone w configu CC:Tweaked!")
     return false
@@ -103,6 +120,15 @@ local function install(isUpdate)
     return false
   end
   local old = localVersion()
+  -- aktualizacja: nic nie pobieramy, jesli zainstalowana wersja jest najnowsza
+  if isUpdate and not force and old and compareVersions(man.version, old) <= 0 then
+    say(colors.lime, "Masz najnowsza wersje: " .. old)
+    if compareVersions(man.version, old) < 0 then
+      print("(na GitHubie jest starsza: " .. tostring(man.version) .. ")")
+    end
+    print("Nic do pobrania. Wymuszenie: update force")
+    return true
+  end
   print("Wersja: " .. tostring(old or "-") .. " -> " .. tostring(man.version))
   -- Pocket Computer dostaje tylko pilota
   local files = man.files
@@ -186,7 +212,7 @@ if cmd == "install" then
   local ok = install(false)
   if not ok then error("Instalacja nieudana", 0) end
 elseif cmd == "update" then
-  local ok = install(true)
+  local ok = install(true, args[2] == "force")
   if not ok then error("Aktualizacja nieudana", 0) end
 elseif cmd == "repo" then
   if not args[2] or not args[2]:match("^[%w%-_%.]+/[%w%-_%.]+$") then
@@ -198,12 +224,16 @@ elseif cmd == "repo" then
   say(colors.lime, "Repozytorium ustawione na " .. args[2] .. " (" .. (args[3] or DEFAULT_BRANCH) .. ")")
 elseif cmd == "version" then
   local repo, branch = getRepo()
-  print("Lokalna: " .. tostring(localVersion() or "-"))
+  local loc = localVersion()
+  print("Lokalna: " .. tostring(loc or "-"))
   local base = "https://raw.githubusercontent.com/" .. repo .. "/" .. resolveRef(repo, branch) .. "/"
   local man = fetchManifest(base)
   print("Zdalna:  " .. tostring(man and man.version or "?"))
+  if man and loc then
+    print(compareVersions(man.version, loc) > 0 and "Dostepna aktualizacja - wpisz: update" or "Masz najnowsza wersje")
+  end
 elseif cmd == "uninstall" then
   uninstall()
 else
-  print("Uzycie: install [update|repo|version|uninstall]")
+  print("Uzycie: install [update [force]|repo|version|uninstall]")
 end

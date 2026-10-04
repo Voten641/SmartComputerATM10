@@ -319,6 +319,79 @@ end
 textutils.serialize = function(v) return ser(v) end
 textutils.serialise = textutils.serialize
 textutils.unserialize = function(s) local f = load("return " .. s, "u", "t", {}); if not f then return nil end local ok, v = pcall(f) return ok and v or nil end
+-- minimalny JSON (jak textutils w CC: tablice, obiekty, stringi, liczby, bool)
+local function jenc(v)
+  local t = type(v)
+  if t == "table" then
+    if #v > 0 or next(v) == nil then
+      local parts = {}
+      for _, x in ipairs(v) do parts[#parts + 1] = jenc(x) end
+      return "[" .. table.concat(parts, ",") .. "]"
+    end
+    local parts = {}
+    for k, x in pairs(v) do parts[#parts + 1] = jenc(tostring(k)) .. ":" .. jenc(x) end
+    return "{" .. table.concat(parts, ",") .. "}"
+  elseif t == "string" then
+    return '"' .. v:gsub('[%c"\\]', function(c) return string.format("\\u%04x", c:byte()) end) .. '"'
+  elseif t == "nil" then return "null"
+  else return tostring(v) end
+end
+local function jdec(str)
+  local pos = 1
+  local function ws() pos = str:find("[^%s]", pos) or #str + 1 end
+  local val
+  local function strv()
+    local out = {}
+    pos = pos + 1
+    while true do
+      local c = str:sub(pos, pos)
+      if c == '"' then pos = pos + 1 break end
+      if c == "\\" then
+        local n = str:sub(pos + 1, pos + 1)
+        if n == "u" then out[#out + 1] = utf8.char(tonumber(str:sub(pos + 2, pos + 5), 16)); pos = pos + 6
+        else out[#out + 1] = ({ n = "\n", t = "\t", r = "\r" })[n] or n; pos = pos + 2 end
+      else out[#out + 1] = c; pos = pos + 1 end
+    end
+    return table.concat(out)
+  end
+  function val()
+    ws()
+    local c = str:sub(pos, pos)
+    if c == "{" then
+      local o = {}
+      pos = pos + 1; ws()
+      if str:sub(pos, pos) == "}" then pos = pos + 1 return o end
+      while true do
+        ws(); local k = strv(); ws(); pos = pos + 1
+        o[k] = val(); ws()
+        local d = str:sub(pos, pos); pos = pos + 1
+        if d == "}" then return o end
+      end
+    elseif c == "[" then
+      local a = {}
+      pos = pos + 1; ws()
+      if str:sub(pos, pos) == "]" then pos = pos + 1 return a end
+      while true do
+        a[#a + 1] = val(); ws()
+        local d = str:sub(pos, pos); pos = pos + 1
+        if d == "]" then return a end
+      end
+    elseif c == '"' then return strv()
+    elseif str:sub(pos, pos + 3) == "true" then pos = pos + 4 return true
+    elseif str:sub(pos, pos + 4) == "false" then pos = pos + 5 return false
+    elseif str:sub(pos, pos + 3) == "null" then pos = pos + 4 return nil
+    else
+      local num = str:match("^-?[%d%.eE%+%-]+", pos); pos = pos + #num
+      return tonumber(num)
+    end
+  end
+  local ok, r = pcall(val)
+  return ok and r or nil
+end
+textutils.serialiseJSON = function(v, opts) jsonOpts = opts; return jenc(v) end
+textutils.serializeJSON = textutils.serialiseJSON
+textutils.unserialiseJSON = jdec
+textutils.unserializeJSON = jdec
 textutils.formatTime = function(t, h24) local h = math.floor(t); local m = math.floor((t - h) * 60); return string.format("%d:%02d", h, m) end
 
 printed = {}
@@ -493,8 +566,15 @@ add("environment_detector_0", { "environment_detector" }, {
 })
 radiation = 0.0000001
 local chatMsgs = {}
+chatOpts = {}
 add("chat_box_0", { "chat_box" }, {
-  sendMessage = function(msg, opts) assert(type(opts) == "table") chatMsgs[#chatMsgs + 1] = msg; return true end,
+  sendMessage = function(msg, opts)
+    assert(type(opts) == "table")
+    assert(#msg <= 1024, "wiadomosc za dluga dla Chat Boxa")
+    chatMsgs[#chatMsgs + 1] = msg
+    chatOpts[#chatOpts + 1] = opts
+    return true
+  end,
 })
 notes = {}
 add("speaker_0", { "speaker" }, { playNote = function(i, v, p) assert(v <= 3 and p <= 24) notes[#notes + 1] = i return true end })
@@ -566,7 +646,42 @@ rednet = {
   unhost = function() rednetHost = nil end,
   send = function(id, msg, proto) rednetSent[#rednetSent + 1] = { id = id, msg = msg, proto = proto } return true end,
 }
-http = {}
+-- Ollama (mock): /api/tags i strumieniowe /api/chat (NDJSON), jak prawdziwy serwer
+ollamaRequests = {}
+local function resp(body, code)
+  return { getResponseCode = function() return code or 200 end, readAll = function() return body end, close = function() end }
+end
+http = {
+  get = function(o)
+    local url = type(o) == "table" and o.url or o
+    if url == "http://ollama.test:11434/api/tags" then
+      return resp('{"models":[{"name":"qwen3:8b"},{"name":"llama3.2:3b"}]}')
+    end
+    return nil, "Domain not permitted"
+  end,
+  post = function(o)
+    assert(type(o) == "table" and o.url and o.body, "http.post: oczekiwano tabeli opcji")
+    assert(o.timeout and o.timeout <= 60, "timeout > 60 (limit CC)")
+    if o.url ~= "http://ollama.test:11434/api/chat" then return nil, "Domain not permitted" end
+    local req = textutils.unserialiseJSON(o.body)
+    ollamaRequests[#ollamaRequests + 1] = req
+    local q = req.messages[#req.messages].content
+    local answer
+    if q:find("dlugo") then
+      answer = string.rep("Bardzo dluga odpowiedz modelu. ", 25)
+    else
+      answer = "Energia jest na poziomie 40%, wszystko dziala."
+    end
+    -- strumien: kilka kawalkow, w tym blok myslenia do usuniecia
+    local lines = {
+      '{"message":{"role":"assistant","content":"<think>analiza</think>"},"done":false}',
+      '{"message":{"role":"assistant","content":' .. jenc(answer:sub(1, 10)) .. '},"done":false}',
+      '{"message":{"role":"assistant","content":' .. jenc(answer:sub(11)) .. '},"done":false}',
+      '{"message":{"role":"assistant","content":""},"done":true}',
+    }
+    return resp(table.concat(lines, "\n"))
+  end,
+}
 
 -- konfiguracja startowa: kazdy modul na swoim monitorze
 os.execute("mkdir -p " .. TMP .. "/smart/data")
@@ -590,6 +705,7 @@ cfg.autocraft = { enabled = true, bridge = "auto", every = 1, items = {
 } }
 cfg.remote = { enabled = true, pin = "1234" }
 cfg.theme = os.getenv("SMART_THEME") or "modern"
+cfg.chatbot = { enabled = true, trigger = "smart", prefix = "Smart", ai = { enabled = true, url = "ollama.test:11434", model = "qwen3:8b", maxTokens = 200, memory = 2 } }
 cfg.monitors.monitor_menu = { module = "menu", scale = 1, accent = "cyan", opts = { lock = true, lockAfter = 120 } }
 cfg.history = { interval = 1, points = 100 }
 cfg.monitors.monitor_tiny = { module = "fission", scale = 0.5, accent = "red", opts = {} }
@@ -724,6 +840,7 @@ local seq = {
   back, back,
   function() click("Pilot (Pocket") end,
   back,
+  function() os.queueEvent("mouse_scroll", 10, 10, 10) end,
   function() click("Wyjdz do konsoli") end,
 }
 for i, fn in ipairs(seq) do at(8 + i, fn) end
@@ -895,6 +1012,17 @@ at(13, function()
   check(findText(bigMon, "25.0kFE/t") ~= nil or findText(bigMon, "10.0kFE/t") ~= nil, "brak produkcji generatora")
   screensExtra = dump(bigMon, "monitor_big: energia / zakladka Zrodla")
 end)
+-- chatbot: komendy wbudowane, ukryte pytanie, AI, ignorowanie innych slow
+at(3, function()
+  os.queueEvent("chat", "uuid-1", "Voten641", "smart status", false, "smart status")
+  os.queueEvent("chat", "uuid-1", "Voten641", "smartfon jest fajny", false, "smartfon jest fajny")
+  os.queueEvent("chat", "uuid-1", "Voten641", "Smart: alarmy", true, "Smart: alarmy")
+  os.queueEvent("chat", "uuid-2", "Steve", "smart jak sie ma baza?", false, "smart jak sie ma baza?")
+end)
+at(6, function()
+  os.queueEvent("chat", "uuid-2", "Steve", "smart odpowiedz dlugo", false, "smart odpowiedz dlugo")
+  os.queueEvent("chat", "uuid-2", "Steve", "smart", false, "smart")
+end)
 -- historia
 at(10, function() check(findText(mons.history, "Brak danych") == nil, "historia: brak danych mimo probek") end)
 -- wyswietlacz Create
@@ -961,6 +1089,30 @@ for _, m in ipairs(chatMsgs) do if m:find("Promieniowanie") then hasRad = true e
 check(hasRad, "brak alarmu promieniowania na chat")
 check(io.open(TMP .. "/smart/data/history.lua") ~= nil, "historia nie zapisana na dysk")
 check(rednetHost ~= nil, "rednet.host nie wywolany")
+-- chatbot
+local function chatIndex(pat) for i, m in ipairs(chatMsgs) do if m:find(pat, 1, true) then return i end end end
+local si_ = chatIndex("TFE / ")
+check(si_ ~= nil, "chatbot: brak odpowiedzi na 'smart status'")
+check(si_ and chatOpts[si_].player == nil and chatOpts[si_].prefix == "Smart" and chatOpts[si_].utf8, "chatbot: zle opcje odpowiedzi publicznej")
+local ai_
+for i, m in ipairs(chatMsgs) do if m:sub(1, 7) == "Alarmy:" then ai_ = i end end
+check(ai_ and chatOpts[ai_].player == "Voten641", "chatbot: pytanie z $ powinno dostac prywatna odpowiedz")
+check(chatIndex("smartfon") == nil and #ollamaRequests == 2, "chatbot: 'smartfon' nie powinien byc pytaniem (zapytan AI: " .. #ollamaRequests .. ")")
+local q1 = ollamaRequests[1]
+check(q1 and q1.model == "qwen3:8b" and q1.stream == true and q1.think == false, "ollama: zle parametry zapytania")
+check(q1 and q1.messages[1].role == "system" and q1.messages[1].content:find("Aktualne dane bazy", 1, true), "ollama: brak danych bazy w prompcie")
+check(q1 and q1.messages[#q1.messages].content == "Steve: jak sie ma baza?", "ollama: zle pytanie uzytkownika")
+check(jsonOpts and jsonOpts.unicode_strings, "ollama: JSON bez unicode_strings (polskie znaki)")
+local an_ = chatIndex("Energia jest na poziomie 40%")
+check(an_ ~= nil, "chatbot: brak odpowiedzi AI na czacie")
+for _, m in ipairs(chatMsgs) do check(not m:find("think", 1, true), "chatbot: blok <think> trafil na czat") end
+-- pamiec rozmowy: drugie pytanie Steve'a zawiera poprzednia wymiane
+local q2 = ollamaRequests[2]
+check(q2 and #q2.messages == 4, "ollama: brak pamieci rozmowy (" .. tostring(q2 and #q2.messages) .. " wiadomosci)")
+local parts = 0
+for _, m in ipairs(chatMsgs) do if m:find("Bardzo dluga odpowiedz", 1, true) then parts = parts + 1; check(#m <= 240, "chatbot: czesc odpowiedzi > 240 znakow") end end
+check(parts >= 3, "chatbot: dluga odpowiedz nie zostala podzielona (" .. parts .. ")")
+check(chatIndex("Komendy: smart status") ~= nil, "chatbot: samo 'smart' powinno pokazac pomoc")
 
 ---------------------------------------------------------------------------
 -- Faza 2: pilot na Pocket Computerze
@@ -1050,6 +1202,12 @@ fo = io.open(TMP .. "/screens.txt", "w"); fo:write(table.concat(out, "\n\n")); f
 print("Pilot wyslal: " .. joined)
 
 if previewFile then previewFile:close() end
+if os.getenv("SMART_CHATLOG") then
+  for i, m in ipairs(chatMsgs) do
+    local o = chatOpts[i] or {}
+    io.stdout:write(string.format("[%s%s] %s\n", o.prefix or "?", o.player and (" -> " .. o.player) or "", m))
+  end
+end
 print("Wywolania: " .. table.concat(calls, ", "))
 print("Chat: " .. table.concat(chatMsgs, " | "))
 io.stdout:write(table.concat(printed, "\n"), "\n")

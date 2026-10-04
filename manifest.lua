@@ -1,18 +1,20 @@
 -- Wygenerowane przez tools/make_manifest.lua - nie edytuj recznie
 return {
-  version = "1.2.0",
+  version = "1.3.0",
   files = {
     "install.lua",
     "update.lua",
     "smart/gui/menu.lua",
     "smart/lib/autocraft.lua",
     "smart/lib/auto.lua",
+    "smart/lib/chatbot.lua",
     "smart/lib/config.lua",
     "smart/lib/devices.lua",
     "smart/lib/displays.lua",
     "smart/lib/gfx.lua",
     "smart/lib/history.lua",
     "smart/lib/mod.lua",
+    "smart/lib/ollama.lua",
     "smart/lib/remote.lua",
     "smart/lib/sources.lua",
     "smart/lib/theme.lua",
@@ -53,9 +55,9 @@ return {
     "smart/pocket.lua",
   },
   changelog = {
-    "Nowy wyglad (nowoczesny): wlasna paleta, gladkie paski, wykresy z siatka, okragly wskaznik energii, zaokraglone przyciski i karty, przelaczniki",
-    "Ustawienia > Wyglad: nowoczesny / klasyczny",
-    "Menu: karty, linie sekcji, przelaczniki, klawiatura ekranowa z odstepami",
-    "Pilot: ten sam motyw co baza",
+    "Chatbot na czacie (Chat Box): smart status / reaktor / alarmy / pomoc, $smart = prywatnie",
+    "AI przez serwer Ollama: pytania o baze z aktualnymi danymi, pamiec rozmowy, strumieniowanie",
+    "Menu > Czat i AI (Ollama): adres, model (lista z serwera), test polaczenia",
+    "update nic nie pobiera, gdy masz najnowsza wersje; update force",
   },
 }
